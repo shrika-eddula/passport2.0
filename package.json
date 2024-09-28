@@ -1,0 +1,15 @@
+{
+  "name": "passport2.0",
+  "version": "1.0.0",
+  "description": "",
+  "main": "./electron/main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^32.1.2"
+  }
+}
