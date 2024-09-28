@@ -1,89 +1,59 @@
-const { exec } = require("child_process");
-const nodeConsole = require("console");
-const { ipcRenderer } = require("electron");
+const { ipcRenderer } = require('electron');
 
-const terminalConsole = new nodeConsole.Console(process.stdout, process.stderr);
-let child;
+let currentNoteId = null;
 
-ipcRenderer.send("run-command", "ls");
-ipcRenderer.on("run-command-result", (event, result) => {
-  if (result.error) {
-    console.error("Error:", result.error);
-  } else {
-    console.log("Output:", result.output);
-  }
-});
+document.addEventListener('DOMContentLoaded', () => {
+    const newNoteButton = document.getElementById('new-note');
+    const saveNoteButton = document.getElementById('save-note');
+    const noteList = document.getElementById('note-list');
+    const noteTitle = document.getElementById('note-title');
+    const noteContent = document.getElementById('note-content');
 
-const printBoth = (str) => {
-  console.log(`Javascript: ${str}`);
-  terminalConsole.log(`Javascript: ${str}`);
-};
+    newNoteButton.addEventListener('click', () => {
+        currentNoteId = null;
+        noteTitle.value = '';
+        noteContent.value = '';
+    });
 
-const sendToProgram = (str) => {
-  child.stdin.write(str);
-  child.stdout.on("data", (data) => {
-    printBoth(
-      `Following data has been piped from python program: ${data.toString(
-        "utf8"
-      )}`
-    );
-  });
-};
+    saveNoteButton.addEventListener('click', () => {
+        const title = noteTitle.value;
+        const content = noteContent.value;
+        
+        if (currentNoteId) {
+            ipcRenderer.send('update-note', { id: currentNoteId, title, content });
+        } else {
+            ipcRenderer.send('create-note', { title, content });
+        }
+    });
 
-const startCodeFunction = () => {
-  printBoth("Initiating program");
+    ipcRenderer.on('note-saved', (event, note) => {
+        currentNoteId = note.id;
+        updateNoteList();
+    });
 
-  child = exec("python -i ./python/pythonExample.py", (error) => {
-    if (error) {
-      printBoth(`exec error: ${error}`);
+    ipcRenderer.on('note-list', (event, notes) => {
+        noteList.innerHTML = '';
+        notes.forEach(note => {
+            const li = document.createElement('li');
+            li.textContent = note.title;
+            li.addEventListener('click', () => loadNote(note.id));
+            noteList.appendChild(li);
+        });
+    });
+
+    function loadNote(id) {
+        ipcRenderer.send('get-note', id);
     }
-  });
 
-  child.stdout.on("data", (data) => {
-    printBoth(
-      `Following data has been piped from python program: ${data.toString(
-        "utf8"
-      )}`
-    );
-  });
-};
+    ipcRenderer.on('note-loaded', (event, note) => {
+        currentNoteId = note.id;
+        noteTitle.value = note.title;
+        noteContent.value = note.content;
+    });
 
-const sendCodeFunction = () => {
-  const stringToSend = document.getElementById("string_to_send").value;
-  printBoth(`Sending "${stringToSend}" to program`);
-  sendToProgram(stringToSend);
-};
-
-const stopCodeFunction = () => {
-  printBoth("Terminated program");
-  sendToProgram("terminate");
-  child.stdin.end();
-};
-
-const openFileFunctionSync = () => {
-  printBoth("From guiExample.js sending a request to main.js via ipc");
-  ipcRenderer.send("open_json_file_sync");
-};
-
-const openFileFunctionAsync = () => {
-  printBoth("From guiExample.js sending a request to main.js via ipc");
-  ipcRenderer.send("open_json_file_async");
-};
-
-document.addEventListener("DOMContentLoaded", () => {
-  document
-    .getElementById("start_code")
-    .addEventListener("click", startCodeFunction);
-  document
-    .getElementById("send_code")
-    .addEventListener("click", sendCodeFunction);
-  document
-    .getElementById("stop_code")
-    .addEventListener("click", stopCodeFunction);
-  document
-    .getElementById("open_file_sync")
-    .addEventListener("click", openFileFunctionSync);
-  document
-    .getElementById("open_file_async")
-    .addEventListener("click", openFileFunctionAsync);
+    updateNoteList();
 });
+
+function updateNoteList() {
+    ipcRenderer.send('get-notes');
+}
