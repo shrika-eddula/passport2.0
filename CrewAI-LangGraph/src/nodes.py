@@ -11,7 +11,7 @@ class Nodes():
 	def check_email(self, state):
 		print("# Checking for new emails")
 		search = GmailSearch(api_resource=self.gmail.api_resource)
-		emails = search('after:newer_than:1d')
+		emails = search('newer_than:1d')
 		checked_emails = state['checked_emails_ids'] if state['checked_emails_ids'] else []
 		thread = []
 		new_emails = []
