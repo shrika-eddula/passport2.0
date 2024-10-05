@@ -6,7 +6,7 @@ from langchain.llms import OpenAI
 class NoteBackend:
     def __init__(self):
         self.notes = []
-        self.llm = OpenAI()
+        self.llm = OpenAI(model="gpt-3.5-turbo-1106")
 
     def create_note(self, title, content):
         note_id = len(self.notes)
