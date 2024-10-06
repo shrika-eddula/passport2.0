@@ -2,7 +2,7 @@ from openai import OpenAI
 import openai 
 
 # Set your OpenAI API key
-openai.api_key = "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"
+openai.api_key = ""
 
 # Specify the path to your text file
 file_path = 'CrewAI Documentation.txt'
