@@ -1,0 +1,6542 @@
+﻿Below, you'll find an extensive list of integrations that are possible with the CrewAI agent creation framework. These integrations allow you to extend the capabilities of your CrewAI agents, enabling seamless interaction with various platforms, tools, and services. Whether you're looking to automate complex workflows, extract information from web sources, or enhance functionality with specialized APIs, CrewAI provides the flexibility to integrate with a wide range of technologies. 
+
+
+<<START TOOL: BrowserbaseLoadTool>>
+# BrowserbaseLoadTool
+
+
+## Description
+
+
+[Browserbase](https://browserbase.com) is a developer platform to reliably run, manage, and monitor headless browsers.
+
+
+ Power your AI data retrievals with:
+ - [Serverless Infrastructure](https://docs.browserbase.com/under-the-hood) providing reliable browsers to extract data from complex UIs
+ - [Stealth Mode](https://docs.browserbase.com/features/stealth-mode) with included fingerprinting tactics and automatic captcha solving
+ - [Session Debugger](https://docs.browserbase.com/features/sessions) to inspect your Browser Session with networks timeline and logs
+ - [Live Debug](https://docs.browserbase.com/guides/session-debug-connection/browser-remote-control) to quickly debug your automation
+
+
+## Installation
+
+
+- Get an API key and Project ID from [browserbase.com](https://browserbase.com) and set it in environment variables (`BROWSERBASE_API_KEY`, `BROWSERBASE_PROJECT_ID`).
+- Install the [Browserbase SDK](http://github.com/browserbase/python-sdk) along with `crewai[tools]` package:
+
+
+```
+pip install browserbase 'crewai[tools]'
+```
+
+
+## Example
+
+
+Utilize the BrowserbaseLoadTool as follows to allow your agent to load websites:
+
+
+```python
+from crewai_tools import BrowserbaseLoadTool
+
+
+tool = BrowserbaseLoadTool()
+```
+
+
+## Arguments
+
+
+- `api_key` Optional. Browserbase API key. Default is `BROWSERBASE_API_KEY` env variable.
+- `project_id` Optional. Browserbase Project ID. Default is `BROWSERBASE_PROJECT_ID` env variable.
+- `text_content` Retrieve only text content. Default is `False`.
+- `session_id` Optional. Provide an existing Session ID.
+- `proxy` Optional. Enable/Disable Proxies."
+from typing import Any, Optional, Type
+
+
+from pydantic import BaseModel, Field
+
+
+from crewai_tools.tools.base_tool import BaseTool
+
+
+
+
+class BrowserbaseLoadToolSchema(BaseModel):
+    url: str = Field(description="Website URL")
+
+
+
+
+class BrowserbaseLoadTool(BaseTool):
+    name: str = "Browserbase web load tool"
+    description: str = (
+        "Load webpages url in a headless browser using Browserbase and return the contents"
+    )
+    args_schema: Type[BaseModel] = BrowserbaseLoadToolSchema
+    api_key: Optional[str] = None
+    project_id: Optional[str] = None
+    text_content: Optional[bool] = False
+    session_id: Optional[str] = None
+    proxy: Optional[bool] = None
+    browserbase: Optional[Any] = None
+
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        project_id: Optional[str] = None,
+        text_content: Optional[bool] = False,
+        session_id: Optional[str] = None,
+        proxy: Optional[bool] = None,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        try:
+            from browserbase import Browserbase  # type: ignore
+        except ImportError:
+            raise ImportError(
+                "`browserbase` package not found, please run `pip install browserbase`"
+            )
+
+
+        self.browserbase = Browserbase(api_key, project_id)
+        self.text_content = text_content
+        self.session_id = session_id
+        self.proxy = proxy
+
+
+    def _run(self, url: str):
+        return self.browserbase.load_url(
+            url, self.text_content, self.session_id, self.proxy
+        )
+<<END TOOL: BrowserbaseLoadTool>>
+
+
+<<START TOOL: CodeDocsSearchTool>>
+# CodeDocsSearchTool
+
+
+## Description
+The CodeDocsSearchTool is a powerful RAG (Retrieval-Augmented Generation) tool designed for semantic searches within code documentation. It enables users to efficiently find specific information or topics within code documentation. By providing a `docs_url` during initialization, the tool narrows down the search to that particular documentation site. Alternatively, without a specific `docs_url`, it searches across a wide array of code documentation known or discovered throughout its execution, making it versatile for various documentation search needs.
+
+
+## Installation
+To start using the CodeDocsSearchTool, first, install the crewai_tools package via pip:
+```shell
+pip install 'crewai[tools]'
+```
+
+
+## Example
+Utilize the CodeDocsSearchTool as follows to conduct searches within code documentation:
+```python
+from crewai_tools import CodeDocsSearchTool
+
+
+# To search any code documentation content if the URL is known or discovered during its execution:
+tool = CodeDocsSearchTool()
+
+
+# OR
+
+
+# To specifically focus your search on a given documentation site by providing its URL:
+tool = CodeDocsSearchTool(docs_url='https://docs.example.com/reference')
+```
+Note: Substitute 'https://docs.example.com/reference' with your target documentation URL and 'How to use search tool' with the search query relevant to your needs.
+
+
+## Arguments
+- `docs_url`: Optional. Specifies the URL of the code documentation to be searched. Providing this during the tool's initialization focuses the search on the specified documentation content.
+
+
+## Custom model and embeddings
+
+
+By default, the tool uses OpenAI for both embeddings and summarization. To customize the model, you can use a config dictionary as follows:
+
+
+```python
+tool = YoutubeVideoSearchTool(
+    config=dict(
+        llm=dict(
+            provider="ollama", # or google, openai, anthropic, llama2, ...
+            config=dict(
+                model="llama2",
+                # temperature=0.5,
+                # top_p=1,
+                # stream=true,
+            ),
+        ),
+        embedder=dict(
+            provider="google",
+            config=dict(
+                model="models/embedding-001",
+                task_type="retrieval_document",
+                # title="Embeddings",
+            ),
+        ),
+    )
+)
+```
+from typing import Any, Optional, Type
+
+
+from embedchain.models.data_type import DataType
+from pydantic import BaseModel, Field
+
+
+from ..rag.rag_tool import RagTool
+
+
+
+
+class FixedCodeDocsSearchToolSchema(BaseModel):
+    """Input for CodeDocsSearchTool."""
+
+
+    search_query: str = Field(
+        ...,
+        description="Mandatory search query you want to use to search the Code Docs content",
+    )
+
+
+
+
+class CodeDocsSearchToolSchema(FixedCodeDocsSearchToolSchema):
+    """Input for CodeDocsSearchTool."""
+
+
+    docs_url: str = Field(..., description="Mandatory docs_url path you want to search")
+
+
+
+
+class CodeDocsSearchTool(RagTool):
+    name: str = "Search a Code Docs content"
+    description: str = (
+        "A tool that can be used to semantic search a query from a Code Docs content."
+    )
+    args_schema: Type[BaseModel] = CodeDocsSearchToolSchema
+
+
+    def __init__(self, docs_url: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        if docs_url is not None:
+            self.add(docs_url)
+            self.description = f"A tool that can be used to semantic search a query the {docs_url} Code Docs content."
+            self.args_schema = FixedCodeDocsSearchToolSchema
+            self._generate_description()
+
+
+    def add(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        kwargs["data_type"] = DataType.DOCS_SITE
+        super().add(*args, **kwargs)
+
+
+    def _before_run(
+        self,
+        query: str,
+        **kwargs: Any,
+    ) -> Any:
+        if "docs_url" in kwargs:
+            self.add(kwargs["docs_url"])
+
+
+    def _run(
+        self,
+        search_query: str,
+        **kwargs: Any,
+    ) -> Any:
+        return super()._run(query=search_query, **kwargs)
+<<END TOOL: CodeDocsSearchTool>>
+
+
+<<START TOOL: CodeInterpreterTool>>
+# CodeInterpreterTool
+
+
+## Description
+This tool is used to give the Agent the ability to run code (Python3) from the code generated by the Agent itself. The code is executed in a sandboxed environment, so it is safe to run any code.
+
+
+It is incredible useful since it allows the Agent to generate code, run it in the same environment, get the result and use it to make decisions.
+
+
+## Requirements
+
+
+- Docker
+
+
+## Installation
+Install the crewai_tools package
+```shell
+pip install 'crewai[tools]'
+```
+
+
+## Example
+
+
+Remember that when using this tool, the code must be generated by the Agent itself. The code must be a Python3 code. And it will take some time for the first time to run because it needs to build the Docker image.
+
+
+```python
+from crewai_tools import CodeInterpreterTool
+
+
+Agent(
+    ...
+    tools=[CodeInterpreterTool()],
+)
+```
+
+
+Or if you need to pass your own Dockerfile just do this
+
+
+```python
+from crewai_tools import CodeInterpreterTool
+
+
+Agent(
+    ...
+    tools=[CodeInterpreterTool(user_dockerfile_path="<Dockerfile_path>")],
+)
+```
+
+DOCKER FILE
+FROM python:3.11-slim
+
+
+# Install common utilities
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    wget \
+    software-properties-common
+
+
+# Clean up
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+
+# Set the working directory
+WORKDIR /workspace
+
+
+import importlib.util
+import os
+from typing import List, Optional, Type
+
+
+import docker
+from pydantic import BaseModel, Field
+
+
+from crewai_tools.tools.base_tool import BaseTool
+
+
+
+
+class CodeInterpreterSchema(BaseModel):
+    """Input for CodeInterpreterTool."""
+
+
+    code: str = Field(
+        ...,
+        description="Python3 code used to be interpreted in the Docker container. ALWAYS PRINT the final result and the output of the code",
+    )
+
+
+    libraries_used: List[str] = Field(
+        ...,
+        description="List of libraries used in the code with proper installing names separated by commas. Example: numpy,pandas,beautifulsoup4",
+    )
+
+
+
+
+class CodeInterpreterTool(BaseTool):
+    name: str = "Code Interpreter"
+    description: str = "Interprets Python3 code strings with a final print statement."
+    args_schema: Type[BaseModel] = CodeInterpreterSchema
+    default_image_tag: str = "code-interpreter:latest"
+    code: Optional[str] = None
+    user_dockerfile_path: Optional[str] = None
+
+
+    @staticmethod
+    def _get_installed_package_path():
+        spec = importlib.util.find_spec("crewai_tools")
+        return os.path.dirname(spec.origin)
+
+
+    def _verify_docker_image(self) -> None:
+        """
+        Verify if the Docker image is available. Optionally use a user-provided Dockerfile.
+        """
+        client = docker.from_env()
+
+
+        try:
+            client.images.get(self.default_image_tag)
+
+
+        except docker.errors.ImageNotFound:
+            if self.user_dockerfile_path and os.path.exists(self.user_dockerfile_path):
+                dockerfile_path = self.user_dockerfile_path
+            else:
+                package_path = self._get_installed_package_path()
+                dockerfile_path = os.path.join(
+                    package_path, "tools/code_interpreter_tool"
+                )
+                if not os.path.exists(dockerfile_path):
+                    raise FileNotFoundError(
+                        f"Dockerfile not found in {dockerfile_path}"
+                    )
+
+
+            client.images.build(
+                path=dockerfile_path,
+                tag=self.default_image_tag,
+                rm=True,
+            )
+
+
+    def _run(self, **kwargs) -> str:
+        code = kwargs.get("code", self.code)
+        libraries_used = kwargs.get("libraries_used", [])
+        return self.run_code_in_docker(code, libraries_used)
+
+
+    def _install_libraries(
+        self, container: docker.models.containers.Container, libraries: List[str]
+    ) -> None:
+        """
+        Install missing libraries in the Docker container
+        """
+        for library in libraries:
+            container.exec_run(f"pip install {library}")
+
+
+    def _init_docker_container(self) -> docker.models.containers.Container:
+        container_name = "code-interpreter"
+        client = docker.from_env()
+        current_path = os.getcwd()
+
+
+        # Check if the container is already running
+        try:
+            existing_container = client.containers.get(container_name)
+            existing_container.stop()
+            existing_container.remove()
+        except docker.errors.NotFound:
+            pass  # Container does not exist, no need to remove
+
+
+        return client.containers.run(
+            self.default_image_tag,
+            detach=True,
+            tty=True,
+            working_dir="/workspace",
+            name=container_name,
+            volumes={current_path: {"bind": "/workspace", "mode": "rw"}},  # type: ignore
+        )
+
+
+    def run_code_in_docker(self, code: str, libraries_used: List[str]) -> str:
+        self._verify_docker_image()
+        container = self._init_docker_container()
+        self._install_libraries(container, libraries_used)
+
+
+        cmd_to_run = f'python3 -c "{code}"'
+        exec_result = container.exec_run(cmd_to_run)
+
+
+        container.stop()
+        container.remove()
+
+
+        if exec_result.exit_code != 0:
+            return f"Something went wrong while running the code: \n{exec_result.output.decode('utf-8')}"
+        return exec_result.output.decode("utf-8")
+
+
+<<END TOOL: CodeInterpreterTool>>
+
+
+
+
+<<START TOOL: ComposioTool>>
+# ComposioTool Documentation
+
+
+## Description
+
+
+This tools is a wrapper around the composio toolset and gives your agent access to a wide variety of tools from the composio SDK.
+
+
+## Installation
+
+
+To incorporate this tool into your project, follow the installation instructions below:
+
+
+```shell
+pip install composio-core 
+pip install 'crewai[tools]'
+```
+
+
+after the installation is complete, either run `composio login` or export your composio API key as `COMPOSIO_API_KEY`.
+
+
+## Example
+
+
+The following example demonstrates how to initialize the tool and execute a github action:
+
+
+1. Initialize toolset
+
+
+```python
+from composio import App
+from crewai_tools import ComposioTool
+from crewai import Agent, Task
+
+
+
+
+tools = [ComposioTool.from_action(action=Action.GITHUB_ACTIVITY_STAR_REPO_FOR_AUTHENTICATED_USER)]
+```
+
+
+If you don't know what action you want to use, use `from_app` and `tags` filter to get relevant actions
+
+
+```python
+tools = ComposioTool.from_app(App.GITHUB, tags=["important"])
+```
+
+
+or use `use_case` to search relevant actions
+
+
+```python
+tools = ComposioTool.from_app(App.GITHUB, use_case="Star a github repository")
+```
+
+
+2. Define agent
+
+
+```python
+crewai_agent = Agent(
+    role="Github Agent",
+    goal="You take action on Github using Github APIs",
+    backstory=(
+        "You are AI agent that is responsible for taking actions on Github "
+        "on users behalf. You need to take action on Github using Github APIs"
+    ),
+    verbose=True,
+    tools=tools,
+)
+```
+
+
+3. Execute task
+
+
+```python
+task = Task(
+    description="Star a repo ComposioHQ/composio on GitHub",
+    agent=crewai_agent,
+    expected_output="if the star happened",
+)
+
+
+task.execute()
+```
+
+
+* More detailed list of tools can be found [here](https://app.composio.dev)
+"""
+Composio tools wrapper.
+"""
+
+
+import typing as t
+
+
+import typing_extensions as te
+
+
+from crewai_tools.tools.base_tool import BaseTool
+
+
+
+
+class ComposioTool(BaseTool):
+    """Wrapper for composio tools."""
+
+
+    composio_action: t.Callable
+
+
+    def _run(self, *args: t.Any, **kwargs: t.Any) -> t.Any:
+        """Run the composio action with given arguments."""
+        return self.composio_action(*args, **kwargs)
+
+
+    @staticmethod
+    def _check_connected_account(tool: t.Any, toolset: t.Any) -> None:
+        """Check if connected account is required and if required it exists or not."""
+        from composio import Action
+        from composio.client.collections import ConnectedAccountModel
+
+
+        tool = t.cast(Action, tool)
+        if tool.no_auth:
+            return
+
+
+        connections = t.cast(
+            t.List[ConnectedAccountModel],
+            toolset.client.connected_accounts.get(),
+        )
+        if tool.app not in [connection.appUniqueId for connection in connections]:
+            raise RuntimeError(
+                f"No connected account found for app `{tool.app}`; "
+                f"Run `composio add {tool.app}` to fix this"
+            )
+
+
+    @classmethod
+    def from_action(
+        cls,
+        action: t.Any,
+        **kwargs: t.Any,
+    ) -> te.Self:
+        """Wrap a composio tool as crewAI tool."""
+
+
+        from composio import Action, ComposioToolSet
+        from composio.constants import DEFAULT_ENTITY_ID
+        from composio.utils.shared import json_schema_to_model
+
+
+        toolset = ComposioToolSet()
+        if not isinstance(action, Action):
+            action = Action(action)
+
+
+        action = t.cast(Action, action)
+        cls._check_connected_account(
+            tool=action,
+            toolset=toolset,
+        )
+
+
+        (action_schema,) = toolset.get_action_schemas(actions=[action])
+        schema = action_schema.model_dump(exclude_none=True)
+        entity_id = kwargs.pop("entity_id", DEFAULT_ENTITY_ID)
+
+
+        def function(**kwargs: t.Any) -> t.Dict:
+            """Wrapper function for composio action."""
+            return toolset.execute_action(
+                action=Action(schema["name"]),
+                params=kwargs,
+                entity_id=entity_id,
+            )
+
+
+        function.__name__ = schema["name"]
+        function.__doc__ = schema["description"]
+
+
+        return cls(
+            name=schema["name"],
+            description=schema["description"],
+            args_schema=json_schema_to_model(
+                action_schema.parameters.model_dump(
+                    exclude_none=True,
+                )
+            ),
+            composio_action=function,
+            **kwargs,
+        )
+
+
+    @classmethod
+    def from_app(
+        cls,
+        *apps: t.Any,
+        tags: t.Optional[t.List[str]] = None,
+        use_case: t.Optional[str] = None,
+        **kwargs: t.Any,
+    ) -> t.List[te.Self]:
+        """Create toolset from an app."""
+        if len(apps) == 0:
+            raise ValueError("You need to provide at least one app name")
+
+
+        if use_case is None and tags is None:
+            raise ValueError("Both `use_case` and `tags` cannot be `None`")
+
+
+        if use_case is not None and tags is not None:
+            raise ValueError(
+                "Cannot use both `use_case` and `tags` to filter the actions"
+            )
+
+
+        from composio import ComposioToolSet
+
+
+        toolset = ComposioToolSet()
+        if use_case is not None:
+            return [
+                cls.from_action(action=action, **kwargs)
+                for action in toolset.find_actions_by_use_case(*apps, use_case=use_case)
+            ]
+
+
+        return [
+            cls.from_action(action=action, **kwargs)
+            for action in toolset.find_actions_by_tags(*apps, tags=tags)
+        ]
+<<END TOOL: ComposioTool>>
+<<START TOOL: CSVSearchTool>>
+# CSVSearchTool
+
+
+## Description
+
+
+This tool is used to perform a RAG (Retrieval-Augmented Generation) search within a CSV file's content. It allows users to semantically search for queries in the content of a specified CSV file. This feature is particularly useful for extracting information from large CSV datasets where traditional search methods might be inefficient. All tools with "Search" in their name, including CSVSearchTool, are RAG tools designed for searching different sources of data.
+
+
+## Installation
+
+
+Install the crewai_tools package
+
+
+```shell
+pip install 'crewai[tools]'
+```
+
+
+## Example
+
+
+```python
+from crewai_tools import CSVSearchTool
+
+
+# Initialize the tool with a specific CSV file. This setup allows the agent to only search the given CSV file.
+tool = CSVSearchTool(csv='path/to/your/csvfile.csv')
+
+
+# OR
+
+
+# Initialize the tool without a specific CSV file. Agent  will need to provide the CSV path at runtime.
+tool = CSVSearchTool()
+```
+
+
+## Arguments
+
+
+- `csv` : The path to the CSV file you want to search. This is a mandatory argument if the tool was initialized without a specific CSV file; otherwise, it is optional.
+
+
+## Custom model and embeddings
+
+
+By default, the tool uses OpenAI for both embeddings and summarization. To customize the model, you can use a config dictionary as follows:
+
+
+```python
+tool = CSVSearchTool(
+    config=dict(
+        llm=dict(
+            provider="ollama", # or google, openai, anthropic, llama2, ...
+            config=dict(
+                model="llama2",
+                # temperature=0.5,
+                # top_p=1,
+                # stream=true,
+            ),
+        ),
+        embedder=dict(
+            provider="google",
+            config=dict(
+                model="models/embedding-001",
+                task_type="retrieval_document",
+                # title="Embeddings",
+            ),
+        ),
+    )
+)
+```
+from typing import Any, Optional, Type
+
+
+from embedchain.models.data_type import DataType
+from pydantic import BaseModel, Field
+
+
+from ..rag.rag_tool import RagTool
+
+
+
+
+class FixedCSVSearchToolSchema(BaseModel):
+    """Input for CSVSearchTool."""
+
+
+    search_query: str = Field(
+        ...,
+        description="Mandatory search query you want to use to search the CSV's content",
+    )
+
+
+
+
+class CSVSearchToolSchema(FixedCSVSearchToolSchema):
+    """Input for CSVSearchTool."""
+
+
+    csv: str = Field(..., description="Mandatory csv path you want to search")
+
+
+
+
+class CSVSearchTool(RagTool):
+    name: str = "Search a CSV's content"
+    description: str = (
+        "A tool that can be used to semantic search a query from a CSV's content."
+    )
+    args_schema: Type[BaseModel] = CSVSearchToolSchema
+
+
+    def __init__(self, csv: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        if csv is not None:
+            self.add(csv)
+            self.description = f"A tool that can be used to semantic search a query the {csv} CSV's content."
+            self.args_schema = FixedCSVSearchToolSchema
+            self._generate_description()
+
+
+    def add(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        kwargs["data_type"] = DataType.CSV
+        super().add(*args, **kwargs)
+
+
+    def _before_run(
+        self,
+        query: str,
+        **kwargs: Any,
+    ) -> Any:
+        if "csv" in kwargs:
+            self.add(kwargs["csv"])
+
+
+    def _run(
+        self,
+        search_query: str,
+        **kwargs: Any,
+    ) -> Any:
+        return super()._run(query=search_query, **kwargs)
+<<END TOOL: CSVSearchTool>>
+
+
+
+
+<<START TOOL: DALL-E Tool>>
+# DALL-E Tool
+
+
+## Description
+This tool is used to give the Agent the ability to generate images using the DALL-E model. It is a transformer-based model that generates images from textual descriptions. This tool allows the Agent to generate images based on the text input provided by the user.
+
+
+## Installation
+Install the crewai_tools package
+```shell
+pip install 'crewai[tools]'
+```
+
+
+## Example
+
+
+Remember that when using this tool, the text must be generated by the Agent itself. The text must be a description of the image you want to generate.
+
+
+```python
+from crewai_tools import DallETool
+
+
+Agent(
+    ...
+    tools=[DallETool()],
+)
+```
+
+
+If needed you can also tweak the parameters of the DALL-E model by passing them as arguments to the `DallETool` class. For example:
+
+
+```python
+from crewai_tools import DallETool
+
+
+dalle_tool = DallETool(model="dall-e-3",
+                       size="1024x1024",
+                       quality="standard",
+                       n=1)
+
+
+Agent(
+    ...
+    tools=[dalle_tool]
+)
+```
+
+
+The parameters are based on the `client.images.generate` method from the OpenAI API. For more information on the parameters, please refer to the [OpenAI API documentation](https://platform.openai.com/docs/guides/images/introduction?lang=python).
+
+import json
+from typing import Type
+
+
+from openai import OpenAI
+from pydantic import BaseModel
+
+
+from crewai_tools.tools.base_tool import BaseTool
+
+
+
+
+class ImagePromptSchema(BaseModel):
+    """Input for Dall-E Tool."""
+
+
+    image_description: str = "Description of the image to be generated by Dall-E."
+
+
+
+
+class DallETool(BaseTool):
+    name: str = "Dall-E Tool"
+    description: str = "Generates images using OpenAI's Dall-E model."
+    args_schema: Type[BaseModel] = ImagePromptSchema
+
+
+    model: str = "dall-e-3"
+    size: str = "1024x1024"
+    quality: str = "standard"
+    n: int = 1
+
+
+    def _run(self, **kwargs) -> str:
+        client = OpenAI()
+
+
+        image_description = kwargs.get("image_description")
+
+
+        if not image_description:
+            return "Image description is required."
+
+
+        response = client.images.generate(
+            model=self.model,
+            prompt=image_description,
+            size=self.size,
+            quality=self.quality,
+            n=self.n,
+        )
+
+
+        image_data = json.dumps(
+            {
+                "image_url": response.data[0].url,
+                "image_description": response.data[0].revised_prompt,
+            }
+        )
+
+
+        return image_data
+
+
+<<END TOOL: DALL-E Tool>>
+
+
+<<START TOOL: DirectoryReadTool>>
+```markdown
+# DirectoryReadTool
+
+
+## Description
+The DirectoryReadTool is a highly efficient utility designed for the comprehensive listing of directory contents. It recursively navigates through the specified directory, providing users with a detailed enumeration of all files, including those nested within subdirectories. This tool is indispensable for tasks requiring a thorough inventory of directory structures or for validating the organization of files within directories.
+
+
+## Installation
+Install the `crewai_tools` package to use the DirectoryReadTool in your project. If you haven't added this package to your environment, you can easily install it with pip using the following command:
+
+
+```shell
+pip install 'crewai[tools]'
+```
+
+
+This installs the latest version of the `crewai_tools` package, allowing access to the DirectoryReadTool and other utilities.
+
+
+## Example
+The DirectoryReadTool is simple to use. The code snippet below shows how to set up and use the tool to list the contents of a specified directory:
+
+
+```python
+from crewai_tools import DirectoryReadTool
+
+
+# Initialize the tool with the directory you want to explore
+tool = DirectoryReadTool(directory='/path/to/your/directory')
+
+
+# Use the tool to list the contents of the specified directory
+directory_contents = tool.run()
+print(directory_contents)
+```
+
+
+This example demonstrates the essential steps to utilize the DirectoryReadTool effectively, highlighting its simplicity and user-friendly design.
+
+
+## Arguments
+The DirectoryReadTool requires minimal configuration for use. The essential argument for this tool is as follows:
+
+
+- `directory`: A mandatory argument that specifies the path to the directory whose contents you wish to list. It accepts both absolute and relative paths, guiding the tool to the desired directory for content listing.
+
+
+The DirectoryReadTool provides a user-friendly and efficient way to list directory contents, making it an invaluable tool for managing and inspecting directory structures.
+```
+
+
+This revised documentation for the DirectoryReadTool maintains the structure and content requirements as outlined, with adjustments made for clarity, consistency, and adherence to the high-quality standards exemplified in the provided documentation example.
+
+
+import os
+from typing import Any, Optional, Type
+
+
+from pydantic import BaseModel, Field
+
+
+from ..base_tool import BaseTool
+
+
+
+
+class FixedDirectoryReadToolSchema(BaseModel):
+    """Input for DirectoryReadTool."""
+
+
+    pass
+
+
+
+
+class DirectoryReadToolSchema(FixedDirectoryReadToolSchema):
+    """Input for DirectoryReadTool."""
+
+
+    directory: str = Field(..., description="Mandatory directory to list content")
+
+
+
+
+class DirectoryReadTool(BaseTool):
+    name: str = "List files in directory"
+    description: str = (
+        "A tool that can be used to recursively list a directory's content."
+    )
+    args_schema: Type[BaseModel] = DirectoryReadToolSchema
+    directory: Optional[str] = None
+
+
+    def __init__(self, directory: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        if directory is not None:
+            self.directory = directory
+            self.description = f"A tool that can be used to list {directory}'s content."
+            self.args_schema = FixedDirectoryReadToolSchema
+            self._generate_description()
+
+
+    def _run(
+        self,
+        **kwargs: Any,
+    ) -> Any:
+        directory = kwargs.get("directory", self.directory)
+        if directory[-1] == "/":
+            directory = directory[:-1]
+        files_list = [
+            f"{directory}/{(os.path.join(root, filename).replace(directory, '').lstrip(os.path.sep))}"
+            for root, dirs, files in os.walk(directory)
+            for filename in files
+        ]
+        files = "\n- ".join(files_list)
+        return f"File paths: \n-{files}"
+
+
+
+
+<<END TOOL: DirectoryReadTool>>
+
+
+<<START TOOL: DirectorySearchTool>>
+# DirectorySearchTool
+
+
+## Description
+This tool is designed to perform a semantic search for queries within the content of a specified directory. Utilizing the RAG (Retrieval-Augmented Generation) methodology, it offers a powerful means to semantically navigate through the files of a given directory. The tool can be dynamically set to search any directory specified at runtime or can be pre-configured to search within a specific directory upon initialization.
+
+
+## Installation
+To start using the DirectorySearchTool, you need to install the crewai_tools package. Execute the following command in your terminal:
+
+
+```shell
+pip install 'crewai[tools]'
+```
+
+
+## Example
+The following examples demonstrate how to initialize the DirectorySearchTool for different use cases and how to perform a search:
+
+
+```python
+from crewai_tools import DirectorySearchTool
+
+
+# To enable searching within any specified directory at runtime
+tool = DirectorySearchTool()
+
+
+# Alternatively, to restrict searches to a specific directory
+tool = DirectorySearchTool(directory='/path/to/directory')
+```
+
+
+## Arguments
+- `directory` : This string argument specifies the directory within which to search. It is mandatory if the tool has not been initialized with a directory; otherwise, the tool will only search within the initialized directory.
+
+
+## Custom model and embeddings
+
+
+By default, the tool uses OpenAI for both embeddings and summarization. To customize the model, you can use a config dictionary as follows:
+
+
+```python
+tool = DirectorySearchTool(
+    config=dict(
+        llm=dict(
+            provider="ollama", # or google, openai, anthropic, llama2, ...
+            config=dict(
+                model="llama2",
+                # temperature=0.5,
+                # top_p=1,
+                # stream=true,
+            ),
+        ),
+        embedder=dict(
+            provider="google",
+            config=dict(
+                model="models/embedding-001",
+                task_type="retrieval_document",
+                # title="Embeddings",
+            ),
+        ),
+    )
+)
+```
+from typing import Any, Optional, Type
+
+
+from embedchain.loaders.directory_loader import DirectoryLoader
+from pydantic import BaseModel, Field
+
+
+from ..rag.rag_tool import RagTool
+
+
+
+
+class FixedDirectorySearchToolSchema(BaseModel):
+    """Input for DirectorySearchTool."""
+
+
+    search_query: str = Field(
+        ...,
+        description="Mandatory search query you want to use to search the directory's content",
+    )
+
+
+
+
+class DirectorySearchToolSchema(FixedDirectorySearchToolSchema):
+    """Input for DirectorySearchTool."""
+
+
+    directory: str = Field(..., description="Mandatory directory you want to search")
+
+
+
+
+class DirectorySearchTool(RagTool):
+    name: str = "Search a directory's content"
+    description: str = (
+        "A tool that can be used to semantic search a query from a directory's content."
+    )
+    args_schema: Type[BaseModel] = DirectorySearchToolSchema
+
+
+    def __init__(self, directory: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        if directory is not None:
+            self.add(directory)
+            self.description = f"A tool that can be used to semantic search a query the {directory} directory's content."
+            self.args_schema = FixedDirectorySearchToolSchema
+            self._generate_description()
+
+
+    def add(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        kwargs["loader"] = DirectoryLoader(config=dict(recursive=True))
+        super().add(*args, **kwargs)
+
+
+    def _before_run(
+        self,
+        query: str,
+        **kwargs: Any,
+    ) -> Any:
+        if "directory" in kwargs:
+            self.add(kwargs["directory"])
+
+
+    def _run(
+        self,
+        search_query: str,
+        **kwargs: Any,
+    ) -> Any:
+        return super()._run(query=search_query, **kwargs)
+
+
+<<END TOOL: DirectorySearchTool>>
+
+
+<<START TOOL: DOCXSearchTool>>
+# DOCXSearchTool
+
+
+## Description
+The DOCXSearchTool is a RAG tool designed for semantic searching within DOCX documents. It enables users to effectively search and extract relevant information from DOCX files using query-based searches. This tool is invaluable for data analysis, information management, and research tasks, streamlining the process of finding specific information within large document collections.
+
+
+## Installation
+Install the crewai_tools package by running the following command in your terminal:
+
+
+```shell
+pip install 'crewai[tools]'
+```
+
+
+## Example
+The following example demonstrates initializing the DOCXSearchTool to search within any DOCX file's content or with a specific DOCX file path.
+
+
+```python
+from crewai_tools import DOCXSearchTool
+
+
+# Initialize the tool to search within any DOCX file's content
+tool = DOCXSearchTool()
+
+
+# OR
+
+
+# Initialize the tool with a specific DOCX file, so the agent can only search the content of the specified DOCX file
+tool = DOCXSearchTool(docx='path/to/your/document.docx')
+```
+
+
+## Arguments
+- `docx`: An optional file path to a specific DOCX document you wish to search. If not provided during initialization, the tool allows for later specification of any DOCX file's content path for searching.
+
+
+## Custom model and embeddings
+
+
+By default, the tool uses OpenAI for both embeddings and summarization. To customize the model, you can use a config dictionary as follows:
+
+
+```python
+tool = DOCXSearchTool(
+    config=dict(
+        llm=dict(
+            provider="ollama", # or google, openai, anthropic, llama2, ...
+            config=dict(
+                model="llama2",
+                # temperature=0.5,
+                # top_p=1,
+                # stream=true,
+            ),
+        ),
+        embedder=dict(
+            provider="google",
+            config=dict(
+                model="models/embedding-001",
+                task_type="retrieval_document",
+                # title="Embeddings",
+            ),
+        ),
+    )
+)
+```
+from typing import Any, Optional, Type
+
+
+from embedchain.models.data_type import DataType
+from pydantic import BaseModel, Field
+
+
+from ..rag.rag_tool import RagTool
+
+
+
+
+class FixedDOCXSearchToolSchema(BaseModel):
+    """Input for DOCXSearchTool."""
+
+
+    docx: Optional[str] = Field(
+        ..., description="Mandatory docx path you want to search"
+    )
+    search_query: str = Field(
+        ...,
+        description="Mandatory search query you want to use to search the DOCX's content",
+    )
+
+
+
+
+class DOCXSearchToolSchema(FixedDOCXSearchToolSchema):
+    """Input for DOCXSearchTool."""
+
+
+    search_query: str = Field(
+        ...,
+        description="Mandatory search query you want to use to search the DOCX's content",
+    )
+
+
+
+
+class DOCXSearchTool(RagTool):
+    name: str = "Search a DOCX's content"
+    description: str = (
+        "A tool that can be used to semantic search a query from a DOCX's content."
+    )
+    args_schema: Type[BaseModel] = DOCXSearchToolSchema
+
+
+    def __init__(self, docx: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        if docx is not None:
+            self.add(docx)
+            self.description = f"A tool that can be used to semantic search a query the {docx} DOCX's content."
+            self.args_schema = FixedDOCXSearchToolSchema
+            self._generate_description()
+
+
+    def add(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        kwargs["data_type"] = DataType.DOCX
+        super().add(*args, **kwargs)
+
+
+    def _before_run(
+        self,
+        query: str,
+        **kwargs: Any,
+    ) -> Any:
+        if "docx" in kwargs:
+            self.add(kwargs["docx"])
+
+
+    def _run(
+        self,
+        **kwargs: Any,
+    ) -> Any:
+        search_query = kwargs.get("search_query")
+        if search_query is None:
+            search_query = kwargs.get("query")
+
+
+        docx = kwargs.get("docx")
+        if docx is not None:
+            self.add(docx)
+        return super()._run(query=search_query, **kwargs)
+
+
+<<END TOOL: DOCXSearchTool>>
+<<START TOOL: EXASearchTool>>
+# EXASearchTool Documentation
+
+
+## Description
+This tool is designed to perform a semantic search for a specified query from a text's content across the internet. It utilizes the `https://exa.ai/` API to fetch and display the most relevant search results based on the query provided by the user.
+
+
+## Installation
+To incorporate this tool into your project, follow the installation instructions below:
+```shell
+pip install 'crewai[tools]'
+```
+
+
+## Example
+The following example demonstrates how to initialize the tool and execute a search with a given query:
+
+
+```python
+from crewai_tools import EXASearchTool
+
+
+# Initialize the tool for internet searching capabilities
+tool = EXASearchTool()
+```
+
+
+## Steps to Get Started
+To effectively use the `EXASearchTool`, follow these steps:
+
+
+1. **Package Installation**: Confirm that the `crewai[tools]` package is installed in your Python environment.
+2. **API Key Acquisition**: Acquire a `https://exa.ai/` API key by registering for a free account at `https://exa.ai/`.
+3. **Environment Configuration**: Store your obtained API key in an environment variable named `EXA_API_KEY` to facilitate its use by the tool.
+
+
+## Conclusion
+By integrating the `EXASearchTool` into Python projects, users gain the ability to conduct real-time, relevant searches across the internet directly from their applications. By adhering to the setup and usage guidelines provided, incorporating this tool into projects is streamlined and straightforward.
+
+import os
+from typing import Type
+
+
+from pydantic import BaseModel, Field
+
+
+from crewai_tools.tools.base_tool import BaseTool
+
+
+
+
+class EXABaseToolToolSchema(BaseModel):
+    """Input for EXABaseTool."""
+
+
+    search_query: str = Field(
+        ..., description="Mandatory search query you want to use to search the internet"
+    )
+
+
+
+
+class EXABaseTool(BaseTool):
+    name: str = "Search the internet"
+    description: str = (
+        "A tool that can be used to search the internet from a search_query"
+    )
+    args_schema: Type[BaseModel] = EXABaseToolToolSchema
+    search_url: str = "https://api.exa.ai/search"
+    n_results: int = None
+    headers: dict = {
+        "accept": "application/json",
+        "content-type": "application/json",
+    }
+
+
+    def _parse_results(self, results):
+        stirng = []
+        for result in results:
+            try:
+                stirng.append(
+                    "\n".join(
+                        [
+                            f"Title: {result['title']}",
+                            f"Score: {result['score']}",
+                            f"Url: {result['url']}",
+                            f"ID: {result['id']}",
+                            "---",
+                        ]
+                    )
+                )
+            except KeyError:
+                next
+
+
+        content = "\n".join(stirng)
+        return f"\nSearch results: {content}\n"
+
+import os
+import requests
+from typing import Any
+
+
+from .exa_base_tool import EXABaseTool
+
+
+class EXASearchTool(EXABaseTool):
+  def _run(
+    self,
+    **kwargs: Any,
+  ) -> Any:
+    search_query = kwargs.get('search_query')
+    if search_query is None:
+      search_query = kwargs.get('query')
+
+
+    payload = {
+        "query": search_query,
+        "type": "magic",
+    }
+
+
+    headers = self.headers.copy()
+    headers["x-api-key"] = os.environ['EXA_API_KEY']
+
+
+    response = requests.post(self.search_url, json=payload, headers=headers)
+    results = response.json()
+    if 'results' in results:
+      results = super()._parse_results(results['results'])
+    return results
+
+
+<<END TOOL: EXASearchTool>>
+
+
+<<START TOOL: FileReadTool>>
+# FileReadTool
+
+
+## Description
+The FileReadTool is a versatile component of the crewai_tools package, designed to streamline the process of reading and retrieving content from files. It is particularly useful in scenarios such as batch text file processing, runtime configuration file reading, and data importation for analytics. This tool supports various text-based file formats including `.txt`, `.csv`, `.json`, and adapts its functionality based on the file type, for instance, converting JSON content into a Python dictionary for easy use.
+
+
+## Installation
+Install the crewai_tools package to use the FileReadTool in your projects:
+
+
+```shell
+pip install 'crewai[tools]'
+```
+
+
+## Example
+To get started with the FileReadTool:
+
+
+```python
+from crewai_tools import FileReadTool
+
+
+# Initialize the tool to read any files the agents knows or lean the path for
+file_read_tool = FileReadTool()
+
+
+# OR
+
+
+# Initialize the tool with a specific file path, so the agent can only read the content of the specified file
+file_read_tool = FileReadTool(file_path='path/to/your/file.txt')
+```
+
+
+## Arguments
+- `file_path`: The path to the file you want to read. It accepts both absolute and relative paths. Ensure the file exists and you have the necessary permissions to access it.
+
+
+from typing import Any, Optional, Type
+
+
+from pydantic import BaseModel, Field
+
+
+from ..base_tool import BaseTool
+
+
+
+
+class FixedFileReadToolSchema(BaseModel):
+    """Input for FileReadTool."""
+
+
+    pass
+
+
+
+
+class FileReadToolSchema(FixedFileReadToolSchema):
+    """Input for FileReadTool."""
+
+
+    file_path: str = Field(..., description="Mandatory file full path to read the file")
+
+
+
+
+class FileReadTool(BaseTool):
+    name: str = "Read a file's content"
+    description: str = "A tool that can be used to read a file's content."
+    args_schema: Type[BaseModel] = FileReadToolSchema
+    file_path: Optional[str] = None
+
+
+    def __init__(self, file_path: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        if file_path is not None:
+            self.file_path = file_path
+            self.description = f"A tool that can be used to read {file_path}'s content."
+            self.args_schema = FixedFileReadToolSchema
+            self._generate_description()
+
+
+    def _run(
+        self,
+        **kwargs: Any,
+    ) -> Any:
+        try:
+            file_path = kwargs.get("file_path", self.file_path)
+            with open(file_path, "r") as file:
+                return file.read()
+        except Exception as e:
+            return f"Fail to read the file {file_path}. Error: {e}"
+
+
+<<END TOOL: FileReadTool>>
+
+
+<<START TOOL: FileWriterTool>>
+Here's the rewritten README for the `FileWriterTool`:
+
+
+# FileWriterTool Documentation
+
+
+## Description
+The `FileWriterTool` is a component of the crewai_tools package, designed to simplify the process of writing content to files. It is particularly useful in scenarios such as generating reports, saving logs, creating configuration files, and more. This tool supports creating new directories if they don't exist, making it easier to organize your output.
+
+
+## Installation
+Install the crewai_tools package to use the `FileWriterTool` in your projects:
+
+
+```shell
+pip install 'crewai[tools]'
+```
+
+
+## Example
+To get started with the `FileWriterTool`:
+
+
+```python
+from crewai_tools import FileWriterTool
+
+
+# Initialize the tool
+file_writer_tool = FileWriterTool()
+
+
+# Write content to a file in a specified directory
+result = file_writer_tool._run('example.txt', 'This is a test content.', 'test_directory')
+print(result)
+```
+
+
+## Arguments
+- `filename`: The name of the file you want to create or overwrite.
+- `content`: The content to write into the file.
+- `directory` (optional): The path to the directory where the file will be created. Defaults to the current directory (`.`). If the directory does not exist, it will be created.
+
+
+## Conclusion
+By integrating the `FileWriterTool` into your crews, the agents can execute the process of writing content to files and creating directories. This tool is essential for tasks that require saving output data, creating structured file systems, and more. By adhering to the setup and usage guidelines provided, incorporating this tool into projects is straightforward and efficient.
+
+
+import os
+from typing import Any, Optional, Type
+
+
+from pydantic import BaseModel
+
+
+from ..base_tool import BaseTool
+
+
+
+
+class FileWriterToolInput(BaseModel):
+    filename: str
+    content: str
+    directory: Optional[str] = None
+    overwrite: bool = False
+
+
+
+
+class FileWriterTool(BaseTool):
+    name: str = "File Writer Tool"
+    description: str = (
+        "A tool to write content to a specified file. Accepts filename, content, and optionally a directory path and overwrite flag as input."
+    )
+    args_schema: Type[BaseModel] = FileWriterToolInput
+
+
+    def _run(self, **kwargs: Any) -> str:
+        try:
+            # Create the directory if it doesn't exist
+            if kwargs["directory"] and not os.path.exists(kwargs["directory"]):
+                os.makedirs(kwargs["directory"])
+
+
+            # Construct the full path
+            filepath = os.path.join(kwargs["directory"] or "", kwargs["filename"])
+
+
+            # Check if file exists and overwrite is not allowed
+            if os.path.exists(filepath) and not kwargs["overwrite"]:
+                return f"File {filepath} already exists and overwrite option was not passed."
+
+
+            # Write content to the file
+            mode = "w" if kwargs["overwrite"] else "x"
+            with open(filepath, mode) as file:
+                file.write(kwargs["content"])
+            return f"Content successfully written to {filepath}"
+        except FileExistsError:
+            return (
+                f"File {filepath} already exists and overwrite option was not passed."
+            )
+        except Exception as e:
+            return f"An error occurred while writing to the file: {str(e)}"
+
+
+<<END TOOL: FileWriterTool>>
+
+
+<<START TOOL: FirecrawlCrawlWebsiteTool>>
+# FirecrawlCrawlWebsiteTool
+
+
+## Description
+
+
+[Firecrawl](https://firecrawl.dev) is a platform for crawling and convert any website into clean markdown or structured data.
+
+
+## Installation
+
+
+- Get an API key from [firecrawl.dev](https://firecrawl.dev) and set it in environment variables (`FIRECRAWL_API_KEY`).
+- Install the [Firecrawl SDK](https://github.com/mendableai/firecrawl) along with `crewai[tools]` package:
+
+
+```
+pip install firecrawl-py 'crewai[tools]'
+```
+
+
+## Example
+
+
+Utilize the FirecrawlScrapeFromWebsiteTool as follows to allow your agent to load websites:
+
+
+```python
+from crewai_tools import FirecrawlCrawlWebsiteTool
+
+
+tool = FirecrawlCrawlWebsiteTool(url='firecrawl.dev')
+```
+
+
+## Arguments
+
+
+- `api_key`: Optional. Specifies Firecrawl API key. Defaults is the `FIRECRAWL_API_KEY` environment variable.
+- `url`: The base URL to start crawling from.
+- `page_options`: Optional. 
+  - `onlyMainContent`: Optional. Only return the main content of the page excluding headers, navs, footers, etc.
+  - `includeHtml`: Optional. Include the raw HTML content of the page. Will output a html key in the response.
+- `crawler_options`: Optional. Options for controlling the crawling behavior.
+  - `includes`: Optional. URL patterns to include in the crawl.
+  - `exclude`: Optional. URL patterns to exclude from the crawl.
+  - `generateImgAltText`: Optional. Generate alt text for images using LLMs (requires a paid plan).
+  - `returnOnlyUrls`: Optional. If true, returns only the URLs as a list in the crawl status. Note: the response will be a list of URLs inside the data, not a list of documents.
+  - `maxDepth`: Optional. Maximum depth to crawl. Depth 1 is the base URL, depth 2 includes the base URL and its direct children, and so on.
+  - `mode`: Optional. The crawling mode to use. Fast mode crawls 4x faster on websites without a sitemap but may not be as accurate and shouldn't be used on heavily JavaScript-rendered websites.
+  - `limit`: Optional. Maximum number of pages to crawl.
+  - `timeout`: Optional. Timeout in milliseconds for the crawling operation.
+
+
+from typing import Any, Dict, List, Optional, Type
+
+
+from pydantic import BaseModel, Field
+
+
+from crewai_tools.tools.base_tool import BaseTool
+
+
+
+
+class FirecrawlCrawlWebsiteToolSchema(BaseModel):
+    url: str = Field(description="Website URL")
+    crawler_options: Optional[Dict[str, Any]] = Field(
+        default=None, description="Options for crawling"
+    )
+    page_options: Optional[Dict[str, Any]] = Field(
+        default=None, description="Options for page"
+    )
+
+
+
+
+class FirecrawlCrawlWebsiteTool(BaseTool):
+    name: str = "Firecrawl web crawl tool"
+    description: str = "Crawl webpages using Firecrawl and return the contents"
+    args_schema: Type[BaseModel] = FirecrawlCrawlWebsiteToolSchema
+    api_key: Optional[str] = None
+    firecrawl: Optional[Any] = None
+
+
+    def __init__(self, api_key: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        try:
+            from firecrawl import FirecrawlApp  # type: ignore
+        except ImportError:
+            raise ImportError(
+                "`firecrawl` package not found, please run `pip install firecrawl-py`"
+            )
+
+
+        self.firecrawl = FirecrawlApp(api_key=api_key)
+
+
+    def _run(
+        self,
+        url: str,
+        crawler_options: Optional[Dict[str, Any]] = None,
+        page_options: Optional[Dict[str, Any]] = None,
+    ):
+        if crawler_options is None:
+            crawler_options = {}
+        if page_options is None:
+            page_options = {}
+
+
+        options = {"crawlerOptions": crawler_options, "pageOptions": page_options}
+        return self.firecrawl.crawl_url(url, options)
+
+
+<<END TOOL: FirecrawlCrawlWebsiteTool>>
+
+
+<<START TOOL: FirecrawlScrapeWebsiteTool>>
+# FirecrawlScrapeWebsiteTool
+
+
+## Description
+
+
+[Firecrawl](https://firecrawl.dev) is a platform for crawling and convert any website into clean markdown or structured data.
+
+
+## Installation
+
+
+- Get an API key from [firecrawl.dev](https://firecrawl.dev) and set it in environment variables (`FIRECRAWL_API_KEY`).
+- Install the [Firecrawl SDK](https://github.com/mendableai/firecrawl) along with `crewai[tools]` package:
+
+
+```
+pip install firecrawl-py 'crewai[tools]'
+```
+
+
+## Example
+
+
+Utilize the FirecrawlScrapeWebsiteTool as follows to allow your agent to load websites:
+
+
+```python
+from crewai_tools import FirecrawlScrapeWebsiteTool
+
+
+tool = FirecrawlScrapeWebsiteTool(url='firecrawl.dev')
+```
+
+
+## Arguments
+
+
+- `api_key`: Optional. Specifies Firecrawl API key. Defaults is the `FIRECRAWL_API_KEY` environment variable.
+- `url`: The URL to scrape.
+- `page_options`: Optional. 
+  - `onlyMainContent`: Optional. Only return the main content of the page excluding headers, navs, footers, etc.
+  - `includeHtml`: Optional. Include the raw HTML content of the page. Will output a html key in the response.
+- `extractor_options`: Optional. Options for LLM-based extraction of structured information from the page content
+  - `mode`: The extraction mode to use, currently supports 'llm-extraction'
+  - `extractionPrompt`: Optional. A prompt describing what information to extract from the page
+  - `extractionSchema`: Optional. The schema for the data to be extracted
+- `timeout`: Optional. Timeout in milliseconds for the request
+
+
+from typing import Any, Dict, Optional, Type
+
+
+from pydantic import BaseModel, Field
+
+
+from crewai_tools.tools.base_tool import BaseTool
+
+
+
+
+class FirecrawlScrapeWebsiteToolSchema(BaseModel):
+    url: str = Field(description="Website URL")
+    page_options: Optional[Dict[str, Any]] = Field(
+        default=None, description="Options for page scraping"
+    )
+    extractor_options: Optional[Dict[str, Any]] = Field(
+        default=None, description="Options for data extraction"
+    )
+    timeout: Optional[int] = Field(
+        default=None,
+        description="Timeout in milliseconds for the scraping operation. The default value is 30000.",
+    )
+
+
+
+
+class FirecrawlScrapeWebsiteTool(BaseTool):
+    name: str = "Firecrawl web scrape tool"
+    description: str = "Scrape webpages url using Firecrawl and return the contents"
+    args_schema: Type[BaseModel] = FirecrawlScrapeWebsiteToolSchema
+    api_key: Optional[str] = None
+    firecrawl: Optional[Any] = None
+
+
+    def __init__(self, api_key: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        try:
+            from firecrawl import FirecrawlApp  # type: ignore
+        except ImportError:
+            raise ImportError(
+                "`firecrawl` package not found, please run `pip install firecrawl-py`"
+            )
+
+
+        self.firecrawl = FirecrawlApp(api_key=api_key)
+
+
+    def _run(
+        self,
+        url: str,
+        page_options: Optional[Dict[str, Any]] = None,
+        extractor_options: Optional[Dict[str, Any]] = None,
+        timeout: Optional[int] = None,
+    ):
+        if page_options is None:
+            page_options = {}
+        if extractor_options is None:
+            extractor_options = {}
+        if timeout is None:
+            timeout = 30000
+
+
+        options = {
+            "pageOptions": page_options,
+            "extractorOptions": extractor_options,
+            "timeout": timeout,
+        }
+        return self.firecrawl.scrape_url(url, options)
+
+
+
+
+<<END TOOL: FirecrawlScrapeWebsiteTool>>
+
+
+<<START TOOL: FirecrawlSearchTool>>
+# FirecrawlSearchTool
+
+
+## Description
+
+
+[Firecrawl](https://firecrawl.dev) is a platform for crawling and convert any website into clean markdown or structured data.
+
+
+## Installation
+
+
+- Get an API key from [firecrawl.dev](https://firecrawl.dev) and set it in environment variables (`FIRECRAWL_API_KEY`).
+- Install the [Firecrawl SDK](https://github.com/mendableai/firecrawl) along with `crewai[tools]` package:
+
+
+```
+pip install firecrawl-py 'crewai[tools]'
+```
+
+
+## Example
+
+
+Utilize the FirecrawlSearchTool as follows to allow your agent to load websites:
+
+
+```python
+from crewai_tools import FirecrawlSearchTool
+
+
+tool = FirecrawlSearchTool(query='what is firecrawl?')
+```
+
+
+## Arguments
+
+
+- `api_key`: Optional. Specifies Firecrawl API key. Defaults is the `FIRECRAWL_API_KEY` environment variable.
+- `query`: The search query string to be used for searching.
+- `page_options`: Optional. Options for result formatting.
+  - `onlyMainContent`: Optional. Only return the main content of the page excluding headers, navs, footers, etc.
+  - `includeHtml`: Optional. Include the raw HTML content of the page. Will output a html key in the response.
+  - `fetchPageContent`: Optional. Fetch the full content of the page.
+- `search_options`: Optional. Options for controlling the crawling behavior.
+  - `limit`: Optional. Maximum number of pages to crawl.
+
+
+from typing import Any, Dict, List, Optional, Type
+
+
+from pydantic import BaseModel, Field
+
+
+from crewai_tools.tools.base_tool import BaseTool
+
+
+
+
+class FirecrawlSearchToolSchema(BaseModel):
+    query: str = Field(description="Search query")
+    page_options: Optional[Dict[str, Any]] = Field(
+        default=None, description="Options for result formatting"
+    )
+    search_options: Optional[Dict[str, Any]] = Field(
+        default=None, description="Options for searching"
+    )
+
+
+
+
+class FirecrawlSearchTool(BaseTool):
+    name: str = "Firecrawl web search tool"
+    description: str = "Search webpages using Firecrawl and return the results"
+    args_schema: Type[BaseModel] = FirecrawlSearchToolSchema
+    api_key: Optional[str] = None
+    firecrawl: Optional[Any] = None
+
+
+    def __init__(self, api_key: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        try:
+            from firecrawl import FirecrawlApp  # type: ignore
+        except ImportError:
+            raise ImportError(
+                "`firecrawl` package not found, please run `pip install firecrawl-py`"
+            )
+
+
+        self.firecrawl = FirecrawlApp(api_key=api_key)
+
+
+    def _run(
+        self,
+        query: str,
+        page_options: Optional[Dict[str, Any]] = None,
+        result_options: Optional[Dict[str, Any]] = None,
+    ):
+        if page_options is None:
+            page_options = {}
+        if result_options is None:
+            result_options = {}
+
+
+        options = {"pageOptions": page_options, "resultOptions": result_options}
+        return self.firecrawl.search(query, options)
+
+
+
+
+<<END TOOL: FirecrawlSearchTool>>
+
+
+<<START TOOL: GithubSearchTool>>
+# GithubSearchTool
+
+
+## Description
+The GithubSearchTool is a Retrieval Augmented Generation (RAG) tool specifically designed for conducting semantic searches within GitHub repositories. Utilizing advanced semantic search capabilities, it sifts through code, pull requests, issues, and repositories, making it an essential tool for developers, researchers, or anyone in need of precise information from GitHub.
+
+
+## Installation
+To use the GithubSearchTool, first ensure the crewai_tools package is installed in your Python environment:
+
+
+```shell
+pip install 'crewai[tools]'
+```
+
+
+This command installs the necessary package to run the GithubSearchTool along with any other tools included in the crewai_tools package.
+
+
+## Example
+Here’s how you can use the GithubSearchTool to perform semantic searches within a GitHub repository:
+```python
+from crewai_tools import GithubSearchTool
+
+
+# Initialize the tool for semantic searches within a specific GitHub repository
+tool = GithubSearchTool(
+    gh_token='...',
+        github_repo='https://github.com/example/repo',
+        content_types=['code', 'issue'] # Options: code, repo, pr, issue
+)
+
+
+# OR
+
+
+# Initialize the tool for semantic searches within a specific GitHub repository, so the agent can search any repository if it learns about during its execution
+tool = GithubSearchTool(
+    gh_token='...',
+        content_types=['code', 'issue'] # Options: code, repo, pr, issue
+)
+```
+
+
+## Arguments
+- `gh_token` : The GitHub token used to authenticate the search. This is a mandatory field and allows the tool to access the GitHub API for conducting searches.
+- `github_repo` : The URL of the GitHub repository where the search will be conducted. This is a mandatory field and specifies the target repository for your search.
+- `content_types` : Specifies the types of content to include in your search. You must provide a list of content types from the following options: `code` for searching within the code, `repo` for searching within the repository's general information, `pr` for searching within pull requests, and `issue` for searching within issues. This field is mandatory and allows tailoring the search to specific content types within the GitHub repository.
+
+
+## Custom model and embeddings
+
+
+By default, the tool uses OpenAI for both embeddings and summarization. To customize the model, you can use a config dictionary as follows:
+
+
+```python
+tool = GithubSearchTool(
+    config=dict(
+        llm=dict(
+            provider="ollama", # or google, openai, anthropic, llama2, ...
+            config=dict(
+                model="llama2",
+                # temperature=0.5,
+                # top_p=1,
+                # stream=true,
+            ),
+        ),
+        embedder=dict(
+            provider="google",
+            config=dict(
+                model="models/embedding-001",
+                task_type="retrieval_document",
+                # title="Embeddings",
+            ),
+        ),
+    )
+)
+```
+from typing import Any, List, Optional, Type
+
+
+from embedchain.loaders.github import GithubLoader
+from pydantic import BaseModel, Field
+
+
+from ..rag.rag_tool import RagTool
+
+
+
+
+class FixedGithubSearchToolSchema(BaseModel):
+    """Input for GithubSearchTool."""
+
+
+    search_query: str = Field(
+        ...,
+        description="Mandatory search query you want to use to search the github repo's content",
+    )
+
+
+
+
+class GithubSearchToolSchema(FixedGithubSearchToolSchema):
+    """Input for GithubSearchTool."""
+
+
+    github_repo: str = Field(..., description="Mandatory github you want to search")
+    content_types: List[str] = Field(
+        ...,
+        description="Mandatory content types you want to be included search, options: [code, repo, pr, issue]",
+    )
+
+
+
+
+class GithubSearchTool(RagTool):
+    name: str = "Search a github repo's content"
+    description: str = (
+        "A tool that can be used to semantic search a query from a github repo's content. This is not the GitHub API, but instead a tool that can provide semantic search capabilities."
+    )
+    summarize: bool = False
+    gh_token: str
+    args_schema: Type[BaseModel] = GithubSearchToolSchema
+    content_types: List[str]
+
+
+    def __init__(self, github_repo: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        if github_repo is not None:
+            self.add(repo=github_repo)
+            self.description = f"A tool that can be used to semantic search a query the {github_repo} github repo's content. This is not the GitHub API, but instead a tool that can provide semantic search capabilities."
+            self.args_schema = FixedGithubSearchToolSchema
+            self._generate_description()
+
+
+    def add(
+        self,
+        repo: str,
+        content_types: List[str] | None = None,
+        **kwargs: Any,
+    ) -> None:
+        content_types = content_types or self.content_types
+
+
+        kwargs["data_type"] = "github"
+        kwargs["loader"] = GithubLoader(config={"token": self.gh_token})
+        super().add(f"repo:{repo} type:{','.join(content_types)}", **kwargs)
+
+
+    def _before_run(
+        self,
+        query: str,
+        **kwargs: Any,
+    ) -> Any:
+        if "github_repo" in kwargs:
+            self.add(
+                repo=kwargs["github_repo"], content_types=kwargs.get("content_types")
+            )
+
+
+    def _run(
+        self,
+        search_query: str,
+        **kwargs: Any,
+    ) -> Any:
+        return super()._run(query=search_query, **kwargs)
+
+
+<<END TOOL: GithubSearchTool>>
+
+
+<<START TOOL: JSONSearchTool>>
+# JSONSearchTool
+
+
+## Description
+This tool is used to perform a RAG search within a JSON file's content. It allows users to initiate a search with a specific JSON path, focusing the search operation within that particular JSON file. If the path is provided at initialization, the tool restricts its search scope to the specified JSON file, thereby enhancing the precision of search results.
+
+
+## Installation
+Install the crewai_tools package by executing the following command in your terminal:
+
+
+```shell
+pip install 'crewai[tools]'
+```
+
+
+## Example
+Below are examples demonstrating how to use the JSONSearchTool for searching within JSON files. You can either search any JSON content or restrict the search to a specific JSON file.
+
+
+```python
+from crewai_tools import JSONSearchTool
+
+
+# Example 1: Initialize the tool for a general search across any JSON content. This is useful when the path is known or can be discovered during execution.
+tool = JSONSearchTool()
+
+
+# Example 2: Initialize the tool with a specific JSON path, limiting the search to a particular JSON file.
+tool = JSONSearchTool(json_path='./path/to/your/file.json')
+```
+
+
+## Arguments
+- `json_path` (str): An optional argument that defines the path to the JSON file to be searched. This parameter is only necessary if the tool is initialized without a specific JSON path. Providing this argument restricts the search to the specified JSON file.
+
+
+## Custom model and embeddings
+
+
+By default, the tool uses OpenAI for both embeddings and summarization. To customize the model, you can use a config dictionary as follows:
+
+
+```python
+tool = JSONSearchTool(
+    config=dict(
+        llm=dict(
+            provider="ollama", # or google, openai, anthropic, llama2, ...
+            config=dict(
+                model="llama2",
+                # temperature=0.5,
+                # top_p=1,
+                # stream=true,
+            ),
+        ),
+        embedder=dict(
+            provider="google",
+            config=dict(
+                model="models/embedding-001",
+                task_type="retrieval_document",
+                # title="Embeddings",
+            ),
+        ),
+    )
+)
+```
+from typing import Any, Optional, Type
+
+
+from embedchain.models.data_type import DataType
+from pydantic import BaseModel, Field
+
+
+from ..rag.rag_tool import RagTool
+
+
+
+
+class FixedJSONSearchToolSchema(BaseModel):
+    """Input for JSONSearchTool."""
+
+
+    search_query: str = Field(
+        ...,
+        description="Mandatory search query you want to use to search the JSON's content",
+    )
+
+
+
+
+class JSONSearchToolSchema(FixedJSONSearchToolSchema):
+    """Input for JSONSearchTool."""
+
+
+    json_path: str = Field(..., description="Mandatory json path you want to search")
+
+
+
+
+class JSONSearchTool(RagTool):
+    name: str = "Search a JSON's content"
+    description: str = (
+        "A tool that can be used to semantic search a query from a JSON's content."
+    )
+    args_schema: Type[BaseModel] = JSONSearchToolSchema
+
+
+    def __init__(self, json_path: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        if json_path is not None:
+            self.add(json_path)
+            self.description = f"A tool that can be used to semantic search a query the {json_path} JSON's content."
+            self.args_schema = FixedJSONSearchToolSchema
+            self._generate_description()
+
+
+    def add(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        kwargs["data_type"] = DataType.JSON
+        super().add(*args, **kwargs)
+
+
+    def _before_run(
+        self,
+        query: str,
+        **kwargs: Any,
+    ) -> Any:
+        if "json_path" in kwargs:
+            self.add(kwargs["json_path"])
+
+
+    def _run(
+        self,
+        search_query: str,
+        **kwargs: Any,
+    ) -> Any:
+        return super()._run(query=search_query, **kwargs)
+
+
+<<END TOOL: JSONSearchTool>>
+
+
+<<START TOOL: LlamaIndexTool>>
+# LlamaIndexTool Documentation
+
+
+## Description
+This tool is designed to be a general wrapper around LlamaIndex tools and query engines, enabling you to leverage LlamaIndex resources
+in terms of RAG/agentic pipelines as tools to plug into CrewAI agents.
+
+
+## Installation
+To incorporate this tool into your project, follow the installation instructions below:
+```shell
+pip install 'crewai[tools]'
+```
+
+
+## Example
+The following example demonstrates how to initialize the tool and execute a search with a given query:
+
+
+```python
+from crewai_tools import LlamaIndexTool
+
+
+# Initialize the tool from a LlamaIndex Tool
+
+
+## Example 1: Initialize from FunctionTool
+from llama_index.core.tools import FunctionTool
+
+
+your_python_function = lambda ...: ...
+og_tool = FunctionTool.from_defaults(your_python_function, name="<name>", description='<description>')
+tool = LlamaIndexTool.from_tool(og_tool)
+
+
+## Example 2: Initialize from LlamaHub Tools
+from llama_index.tools.wolfram_alpha import WolframAlphaToolSpec
+wolfram_spec = WolframAlphaToolSpec(app_id="<app_id>")
+wolfram_tools = wolfram_spec.to_tool_list()
+tools = [LlamaIndexTool.from_tool(t) for t in wolfram_tools]
+
+
+
+
+# Initialize Tool from a LlamaIndex Query Engine
+
+
+## NOTE: LlamaIndex has a lot of query engines, define whatever query engine you want
+query_engine = index.as_query_engine() 
+query_tool = LlamaIndexTool.from_query_engine(
+    query_engine,
+    name="Uber 2019 10K Query Tool",
+    description="Use this tool to lookup the 2019 Uber 10K Annual Report"
+)
+
+
+```
+
+
+## Steps to Get Started
+To effectively use the `LlamaIndexTool`, follow these steps:
+
+
+1. **Install CrewAI**: Confirm that the `crewai[tools]` package is installed in your Python environment.
+2. **Install and use LlamaIndex**: Follow LlamaIndex documentation (https://docs.llamaindex.ai/) to setup a RAG/agent pipeline.
+
+
+from typing import Any, Optional, Type, cast
+
+
+from pydantic import BaseModel, Field
+
+
+from crewai_tools.tools.base_tool import BaseTool
+
+
+
+
+class LlamaIndexTool(BaseTool):
+    """Tool to wrap LlamaIndex tools/query engines."""
+
+
+    llama_index_tool: Any
+
+
+    def _run(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        """Run tool."""
+        from llama_index.core.tools import BaseTool as LlamaBaseTool
+
+
+        tool = cast(LlamaBaseTool, self.llama_index_tool)
+        return tool(*args, **kwargs)
+
+
+    @classmethod
+    def from_tool(cls, tool: Any, **kwargs: Any) -> "LlamaIndexTool":
+        from llama_index.core.tools import BaseTool as LlamaBaseTool
+
+
+        if not isinstance(tool, LlamaBaseTool):
+            raise ValueError(f"Expected a LlamaBaseTool, got {type(tool)}")
+        tool = cast(LlamaBaseTool, tool)
+
+
+        if tool.metadata.fn_schema is None:
+            raise ValueError(
+                "The LlamaIndex tool does not have an fn_schema specified."
+            )
+        args_schema = cast(Type[BaseModel], tool.metadata.fn_schema)
+
+
+        return cls(
+            name=tool.metadata.name,
+            description=tool.metadata.description,
+            args_schema=args_schema,
+            llama_index_tool=tool,
+            **kwargs,
+        )
+
+
+    @classmethod
+    def from_query_engine(
+        cls,
+        query_engine: Any,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        return_direct: bool = False,
+        **kwargs: Any,
+    ) -> "LlamaIndexTool":
+        from llama_index.core.query_engine import BaseQueryEngine
+        from llama_index.core.tools import QueryEngineTool
+
+
+        if not isinstance(query_engine, BaseQueryEngine):
+            raise ValueError(f"Expected a BaseQueryEngine, got {type(query_engine)}")
+
+
+        # NOTE: by default the schema expects an `input` variable. However this
+        # confuses crewAI so we are renaming to `query`.
+        class QueryToolSchema(BaseModel):
+            """Schema for query tool."""
+
+
+            query: str = Field(..., description="Search query for the query tool.")
+
+
+        # NOTE: setting `resolve_input_errors` to True is important because the schema expects `input` but we are using `query`
+        query_engine_tool = QueryEngineTool.from_defaults(
+            query_engine,
+            name=name,
+            description=description,
+            return_direct=return_direct,
+            resolve_input_errors=True,
+        )
+        # HACK: we are replacing the schema with our custom schema
+        query_engine_tool.metadata.fn_schema = QueryToolSchema
+
+
+        return cls.from_tool(query_engine_tool, **kwargs)
+
+
+<<END TOOL: LlamaIndexTool>>
+
+
+<<START TOOL: MDXSearchTool>>
+# MDXSearchTool
+
+
+## Description
+The MDX Search Tool, a key component of the `crewai_tools` package, is designed for advanced market data extraction, offering invaluable support to researchers and analysts requiring immediate market insights in the AI sector. With its ability to interface with various data sources and tools, it streamlines the process of acquiring, reading, and organizing market data efficiently.
+
+
+## Installation
+To utilize the MDX Search Tool, ensure the `crewai_tools` package is installed. If not already present, install it using the following command:
+
+
+```shell
+pip install 'crewai[tools]'
+```
+
+
+## Example
+Configuring and using the MDX Search Tool involves setting up environment variables and utilizing the tool within a crewAI project for market research. Here's a simple example:
+
+
+```python
+from crewai_tools import MDXSearchTool
+
+
+# Initialize the tool so the agent can search any MDX content if it learns about during its execution
+tool = MDXSearchTool()
+
+
+# OR
+
+
+# Initialize the tool with a specific MDX file path for exclusive search within that document
+tool = MDXSearchTool(mdx='path/to/your/document.mdx')
+```
+
+
+## Arguments
+- mdx: **Optional** The MDX path for the search. Can be provided at initialization
+
+
+## Custom model and embeddings
+
+
+By default, the tool uses OpenAI for both embeddings and summarization. To customize the model, you can use a config dictionary as follows:
+
+
+```python
+tool = MDXSearchTool(
+    config=dict(
+        llm=dict(
+            provider="ollama", # or google, openai, anthropic, llama2, ...
+            config=dict(
+                model="llama2",
+                # temperature=0.5,
+                # top_p=1,
+                # stream=true,
+            ),
+        ),
+        embedder=dict(
+            provider="google",
+            config=dict(
+                model="models/embedding-001",
+                task_type="retrieval_document",
+                # title="Embeddings",
+            ),
+        ),
+    )
+)
+```
+from typing import Any, Optional, Type
+
+
+from embedchain.models.data_type import DataType
+from pydantic import BaseModel, Field
+
+
+from ..rag.rag_tool import RagTool
+
+
+
+
+class FixedMDXSearchToolSchema(BaseModel):
+    """Input for MDXSearchTool."""
+
+
+    search_query: str = Field(
+        ...,
+        description="Mandatory search query you want to use to search the MDX's content",
+    )
+
+
+
+
+class MDXSearchToolSchema(FixedMDXSearchToolSchema):
+    """Input for MDXSearchTool."""
+
+
+    mdx: str = Field(..., description="Mandatory mdx path you want to search")
+
+
+
+
+class MDXSearchTool(RagTool):
+    name: str = "Search a MDX's content"
+    description: str = (
+        "A tool that can be used to semantic search a query from a MDX's content."
+    )
+    args_schema: Type[BaseModel] = MDXSearchToolSchema
+
+
+    def __init__(self, mdx: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        if mdx is not None:
+            self.add(mdx)
+            self.description = f"A tool that can be used to semantic search a query the {mdx} MDX's content."
+            self.args_schema = FixedMDXSearchToolSchema
+            self._generate_description()
+
+
+    def add(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        kwargs["data_type"] = DataType.MDX
+        super().add(*args, **kwargs)
+
+
+    def _before_run(
+        self,
+        query: str,
+        **kwargs: Any,
+    ) -> Any:
+        if "mdx" in kwargs:
+            self.add(kwargs["mdx"])
+
+
+    def _run(
+        self,
+        search_query: str,
+        **kwargs: Any,
+    ) -> Any:
+        return super()._run(query=search_query, **kwargs)
+
+
+
+
+<<END TOOL: MDXSearchTool>>
+
+
+<<START TOOL: MultiOnTool>>
+# MultiOnTool Documentation
+
+
+## Description
+The MultiOnTool, integrated within the crewai_tools package, empowers CrewAI agents with the capability to navigate and interact with the web through natural language instructions. Leveraging the Multion API, this tool facilitates seamless web browsing, making it an essential asset for projects requiring dynamic web data interaction.
+
+
+## Installation
+Ensure the `crewai[tools]` package is installed in your environment to use the MultiOnTool. If it's not already installed, you can add it using the command below:
+```shell
+pip install 'crewai[tools]'
+```
+
+
+## Example
+The following example demonstrates how to initialize the tool and execute a search with a given query:
+
+
+```python
+from crewai import Agent, Task, Crew
+from crewai_tools import MultiOnTool
+
+
+# Initialize the tool from a MultiOn Tool
+multion_tool = MultiOnTool(api_key= "YOUR_MULTION_API_KEY", local=False)
+
+
+Browser = Agent(
+    role="Browser Agent",
+    goal="control web browsers using natural language ",
+    backstory="An expert browsing agent.",
+    tools=[multion_remote_tool],
+    verbose=True,
+)
+
+
+# example task to search and summarize news
+browse = Task(
+    description="Summarize the top 3 trending AI News headlines",
+    expected_output="A summary of the top 3 trending AI News headlines",
+    agent=Browser,
+)
+
+
+crew = Crew(agents=[Browser], tasks=[browse])
+
+
+crew.kickoff()
+```
+
+
+## Arguments
+
+
+- `api_key`: Specifies Browserbase API key. Defaults is the `BROWSERBASE_API_KEY` environment variable.
+- `local`: Use the local flag set as "true" to run the agent locally on your browser. Make sure the multion browser extension is installed and API Enabled is checked.
+- `max_steps`: Optional. Set the max_steps the multion agent can take for a command
+
+
+## Steps to Get Started
+To effectively use the `MultiOnTool`, follow these steps:
+
+
+1. **Install CrewAI**: Confirm that the `crewai[tools]` package is installed in your Python environment.
+2. **Install and use MultiOn**: Follow MultiOn documentation for installing the MultiOn Browser Extension (https://docs.multion.ai/learn/browser-extension).
+3. **Enable API Usage**: Click on the MultiOn extension in the extensions folder of your browser (not the hovering MultiOn icon on the web page) to open the extension configurations. Click the API Enabled toggle to enable the API                             
+
+
+import os
+
+
+from crewai import Agent, Crew, Task
+from multion_tool import MultiOnTool
+
+
+os.environ["OPENAI_API_KEY"] = "Your Key"
+
+
+multion_browse_tool = MultiOnTool(api_key="Your Key")
+
+
+# Create a new agent
+Browser = Agent(
+    role="Browser Agent",
+    goal="control web browsers using natural language ",
+    backstory="An expert browsing agent.",
+    tools=[multion_browse_tool],
+    verbose=True,
+)
+
+
+# Define tasks
+browse = Task(
+    description="Summarize the top 3 trending AI News headlines",
+    expected_output="A summary of the top 3 trending AI News headlines",
+    agent=Browser,
+)
+
+
+
+
+crew = Crew(agents=[Browser], tasks=[browse])
+
+
+crew.kickoff()
+
+
+"""Multion tool spec."""
+
+
+from typing import Any, Optional
+
+
+from crewai_tools.tools.base_tool import BaseTool
+
+
+
+
+class MultiOnTool(BaseTool):
+    """Tool to wrap MultiOn Browse Capabilities."""
+
+
+    name: str = "Multion Browse Tool"
+    description: str = """Multion gives the ability for LLMs to control web browsers using natural language instructions.
+            If the status is 'CONTINUE', reissue the same instruction to continue execution
+        """
+    multion: Optional[Any] = None
+    session_id: Optional[str] = None
+    local: bool = False
+    max_steps: int = 3
+
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        local: bool = False,
+        max_steps: int = 3,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        try:
+            from multion.client import MultiOn  # type: ignore
+        except ImportError:
+            raise ImportError(
+                "`multion` package not found, please run `pip install multion`"
+            )
+        self.session_id = None
+        self.local = local
+        self.multion = MultiOn(api_key=api_key)
+        self.max_steps = max_steps
+
+
+    def _run(
+        self,
+        cmd: str,
+        *args: Any,
+        **kwargs: Any,
+    ) -> str:
+        """
+        Run the Multion client with the given command.
+
+
+        Args:
+            cmd (str): The detailed and specific natural language instructrion for web browsing
+
+
+            *args (Any): Additional arguments to pass to the Multion client
+            **kwargs (Any): Additional keyword arguments to pass to the Multion client
+        """
+
+
+        browse = self.multion.browse(
+            cmd=cmd,
+            session_id=self.session_id,
+            local=self.local,
+            max_steps=self.max_steps,
+            *args,
+            **kwargs,
+        )
+        self.session_id = browse.session_id
+
+
+        return browse.message + "\n\n STATUS: " + browse.status
+<<END TOOL: MultiOnTool>>
+
+
+<<START TOOL: MySQLSearchTooll>>
+# MySQLSearchTool
+
+
+## Description
+This tool is designed to facilitate semantic searches within MySQL database tables. Leveraging the RAG (Retrieve and Generate) technology, the MySQLSearchTool provides users with an efficient means of querying database table content, specifically tailored for MySQL databases. It simplifies the process of finding relevant data through semantic search queries, making it an invaluable resource for users needing to perform advanced queries on extensive datasets within a MySQL database.
+
+
+## Installation
+To install the `crewai_tools` package and utilize the MySQLSearchTool, execute the following command in your terminal:
+
+
+```shell
+pip install 'crewai[tools]'
+```
+
+
+## Example
+Below is an example showcasing how to use the MySQLSearchTool to conduct a semantic search on a table within a MySQL database:
+
+
+```python
+from crewai_tools import MySQLSearchTool
+
+
+# Initialize the tool with the database URI and the target table name
+tool = MySQLSearchTool(db_uri='mysql://user:password@localhost:3306/mydatabase', table_name='employees')
+
+
+```
+
+
+## Arguments
+The MySQLSearchTool requires the following arguments for its operation:
+
+
+- `db_uri`: A string representing the URI of the MySQL database to be queried. This argument is mandatory and must include the necessary authentication details and the location of the database.
+- `table_name`: A string specifying the name of the table within the database on which the semantic search will be performed. This argument is mandatory.
+
+
+## Custom model and embeddings
+
+
+By default, the tool uses OpenAI for both embeddings and summarization. To customize the model, you can use a config dictionary as follows:
+
+
+```python
+tool = MySQLSearchTool(
+    config=dict(
+        llm=dict(
+            provider="ollama", # or google, openai, anthropic, llama2, ...
+            config=dict(
+                model="llama2",
+                # temperature=0.5,
+                # top_p=1,
+                # stream=true,
+            ),
+        ),
+        embedder=dict(
+            provider="google",
+            config=dict(
+                model="models/embedding-001",
+                task_type="retrieval_document",
+                # title="Embeddings",
+            ),
+        ),
+    )
+)
+```
+from typing import Any, Type
+
+
+from embedchain.loaders.mysql import MySQLLoader
+from pydantic import BaseModel, Field
+
+
+from ..rag.rag_tool import RagTool
+
+
+
+
+class MySQLSearchToolSchema(BaseModel):
+    """Input for MySQLSearchTool."""
+
+
+    search_query: str = Field(
+        ...,
+        description="Mandatory semantic search query you want to use to search the database's content",
+    )
+
+
+
+
+class MySQLSearchTool(RagTool):
+    name: str = "Search a database's table content"
+    description: str = (
+        "A tool that can be used to semantic search a query from a database table's content."
+    )
+    args_schema: Type[BaseModel] = MySQLSearchToolSchema
+    db_uri: str = Field(..., description="Mandatory database URI")
+
+
+    def __init__(self, table_name: str, **kwargs):
+        super().__init__(**kwargs)
+        self.add(table_name)
+        self.description = f"A tool that can be used to semantic search a query the {table_name} database table's content."
+        self._generate_description()
+
+
+    def add(
+        self,
+        table_name: str,
+        **kwargs: Any,
+    ) -> None:
+        kwargs["data_type"] = "mysql"
+        kwargs["loader"] = MySQLLoader(config=dict(url=self.db_uri))
+        super().add(f"SELECT * FROM {table_name};", **kwargs)
+
+
+    def _run(
+        self,
+        search_query: str,
+        **kwargs: Any,
+    ) -> Any:
+        return super()._run(query=search_query)
+
+
+<<END TOOL: MySQLSearchTool>>
+
+
+<<START TOOL: NL2SQ Tool>>
+# NL2SQ Tool
+
+
+## Description
+
+
+This tool is used to convert natural language to SQL queries. When passsed to the agent it will generate queries and then use them to interact with the database.
+
+
+This enables multiple workflows like having an Agent to access the database fetch information based on the goal and then use the information to generate a response, report or any other output. Along with that proivdes the ability for the Agent to update the database based on its goal.
+
+
+**Attention**: Make sure that the Agent has access to a Read-Replica or that is okay for the Agent to run insert/update queries on the database.
+
+
+## Requirements
+
+
+- SqlAlchemy
+- Any DB compatible library (e.g. psycopg2, mysql-connector-python)
+
+
+## Installation
+Install the crewai_tools package
+```shell
+pip install 'crewai[tools]'
+```
+
+
+## Usage
+
+
+In order to use the NL2SQLTool, you need to pass the database URI to the tool. The URI should be in the format `dialect+driver://username:password@host:port/database`.
+
+
+
+
+```python
+from crewai_tools import NL2SQLTool
+
+
+# psycopg2 was installed to run this example with PostgreSQL
+nl2sql = NL2SQLTool(db_uri="postgresql://example@localhost:5432/test_db")
+
+
+@agent
+def researcher(self) -> Agent:
+    return Agent(
+        config=self.agents_config["researcher"],
+        allow_delegation=False,
+        tools=[nl2sql]
+    )
+```
+
+
+## Example
+
+
+The primary task goal was:
+
+
+"Retrieve the average, maximum, and minimum monthly revenue for each city, but only include cities that have more than one user. Also, count the number of user in each city and sort the results by the average monthly revenue in descending order"
+
+
+So the Agent tried to get information from the DB, the first one is wrong so the Agent tries again and gets the correct information and passes to the next agent.
+
+
+The second task goal was:
+
+
+"Review the data and create a detailed report, and then create the table on the database with the fields based on the data provided.
+Include information on the average, maximum, and minimum monthly revenue for each city, but only include cities that have more than one user. Also, count the number of users in each city and sort the results by the average monthly revenue in descending order."
+
+
+Now things start to get interesting, the Agent generates the SQL query to not only create the table but also insert the data into the table. And in the end the Agent still returns the final report which is exactly what was in the database.
+
+
+
+
+This is a simple example of how the NL2SQLTool can be used to interact with the database and generate reports based on the data in the database.
+
+
+The Tool provides endless possibilities on the logic of the Agent and how it can interact with the database.
+
+
+```
+ DB -> Agent -> ... -> Agent -> DB
+```
+from typing import Any, Union
+
+
+from ..base_tool import BaseTool
+from pydantic import BaseModel, Field
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
+
+
+from typing import Type, Any
+
+
+class NL2SQLToolInput(BaseModel):
+    sql_query: str = Field(
+        title="SQL Query",
+        description="The SQL query to execute.",
+    )
+
+
+class NL2SQLTool(BaseTool):
+    name: str = "NL2SQLTool"
+    description: str = "Converts natural language to SQL queries and executes them."
+    db_uri: str = Field(
+        title="Database URI",
+        description="The URI of the database to connect to.",
+    )
+    tables: list = []
+    columns: dict = {}
+    args_schema: Type[BaseModel] = NL2SQLToolInput
+
+
+    def model_post_init(self, __context: Any) -> None:
+        data = {}
+        tables = self._fetch_available_tables()
+
+
+        for table in tables:
+            table_columns = self._fetch_all_available_columns(table["table_name"])
+            data[f'{table["table_name"]}_columns'] = table_columns
+
+
+        self.tables = tables
+        self.columns = data
+
+
+    def _fetch_available_tables(self):
+        return self.execute_sql(
+            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';"
+        )
+
+
+    def _fetch_all_available_columns(self, table_name: str):
+        return self.execute_sql(
+            f"SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{table_name}';"
+        )
+
+
+    def _run(self, sql_query: str):
+        try:
+            data = self.execute_sql(sql_query)
+        except Exception as exc:
+            data = (
+                f"Based on these tables {self.tables} and columns {self.columns}, "
+                "you can create SQL queries to retrieve data from the database."
+                f"Get the original request {sql_query} and the error {exc} and create the correct SQL query."
+            )
+
+
+        return data
+
+
+    def execute_sql(self, sql_query: str) -> Union[list, str]:
+        engine = create_engine(self.db_uri)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        try:
+            result = session.execute(text(sql_query))
+            session.commit()
+
+
+            if result.returns_rows:
+                columns = result.keys()
+                data = [dict(zip(columns, row)) for row in result.fetchall()]
+                return data
+            else:
+                return f"Query {sql_query} executed successfully"
+
+
+        except Exception as e:
+            session.rollback()
+            raise e
+
+
+        finally:
+            session.close()
+
+
+
+
+<<END TOOL: NL2SQ Tool>>
+
+
+<<START TOOL: PDFSearchTool>>
+# PDFSearchTool
+
+
+## Description
+The PDFSearchTool is a RAG tool designed for semantic searches within PDF content. It allows for inputting a search query and a PDF document, leveraging advanced search techniques to find relevant content efficiently. This capability makes it especially useful for extracting specific information from large PDF files quickly.
+
+
+## Installation
+To get started with the PDFSearchTool, first, ensure the crewai_tools package is installed with the following command:
+
+
+```shell
+pip install 'crewai[tools]'
+```
+
+
+## Example
+Here's how to use the PDFSearchTool to search within a PDF document:
+
+
+```python
+from crewai_tools import PDFSearchTool
+
+
+# Initialize the tool allowing for any PDF content search if the path is provided during execution
+tool = PDFSearchTool()
+
+
+# OR
+
+
+# Initialize the tool with a specific PDF path for exclusive search within that document
+tool = PDFSearchTool(pdf='path/to/your/document.pdf')
+```
+
+
+## Arguments
+- `pdf`: **Optinal** The PDF path for the search. Can be provided at initialization or within the `run` method's arguments. If provided at initialization, the tool confines its search to the specified document.
+
+
+## Custom model and embeddings
+
+
+By default, the tool uses OpenAI for both embeddings and summarization. To customize the model, you can use a config dictionary as follows:
+
+
+```python
+tool = PDFSearchTool(
+    config=dict(
+        llm=dict(
+            provider="ollama", # or google, openai, anthropic, llama2, ...
+            config=dict(
+                model="llama2",
+                # temperature=0.5,
+                # top_p=1,
+                # stream=true,
+            ),
+        ),
+        embedder=dict(
+            provider="google",
+            config=dict(
+                model="models/embedding-001",
+                task_type="retrieval_document",
+                # title="Embeddings",
+            ),
+        ),
+    )
+)
+```
+from typing import Any, Optional, Type
+
+
+from embedchain.models.data_type import DataType
+from pydantic import BaseModel, Field, model_validator
+
+
+from ..rag.rag_tool import RagTool
+
+
+
+
+class FixedPDFSearchToolSchema(BaseModel):
+    """Input for PDFSearchTool."""
+
+
+    query: str = Field(
+        ..., description="Mandatory query you want to use to search the PDF's content"
+    )
+
+
+
+
+class PDFSearchToolSchema(FixedPDFSearchToolSchema):
+    """Input for PDFSearchTool."""
+
+
+    pdf: str = Field(..., description="Mandatory pdf path you want to search")
+
+
+
+
+class PDFSearchTool(RagTool):
+    name: str = "Search a PDF's content"
+    description: str = (
+        "A tool that can be used to semantic search a query from a PDF's content."
+    )
+    args_schema: Type[BaseModel] = PDFSearchToolSchema
+
+
+    def __init__(self, pdf: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        if pdf is not None:
+            self.add(pdf)
+            self.description = f"A tool that can be used to semantic search a query the {pdf} PDF's content."
+            self.args_schema = FixedPDFSearchToolSchema
+            self._generate_description()
+
+
+    @model_validator(mode="after")
+    def _set_default_adapter(self):
+        if isinstance(self.adapter, RagTool._AdapterPlaceholder):
+            from embedchain import App
+
+
+            from crewai_tools.adapters.pdf_embedchain_adapter import (
+                PDFEmbedchainAdapter,
+            )
+
+
+            app = App.from_config(config=self.config) if self.config else App()
+            self.adapter = PDFEmbedchainAdapter(
+                embedchain_app=app, summarize=self.summarize
+            )
+
+
+        return self
+
+
+    def add(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        kwargs["data_type"] = DataType.PDF_FILE
+        super().add(*args, **kwargs)
+
+
+    def _before_run(
+        self,
+        query: str,
+        **kwargs: Any,
+    ) -> Any:
+        if "pdf" in kwargs:
+            self.add(kwargs["pdf"])
+
+
+<<END TOOL: PDFSearchTool>>
+
+
+<<START TOOL: PDFTextWritingTool>>
+from typing import Any, Optional, Type
+from pydantic import BaseModel, Field
+from pypdf import PdfReader, PdfWriter, PageObject, ContentStream, NameObject, Font
+from pathlib import Path
+
+
+
+
+class PDFTextWritingToolSchema(BaseModel):
+    """Input schema for PDFTextWritingTool."""
+    pdf_path: str = Field(..., description="Path to the PDF file to modify")
+    text: str = Field(..., description="Text to add to the PDF")
+    position: tuple = Field(..., description="Tuple of (x, y) coordinates for text placement")
+    font_size: int = Field(default=12, description="Font size of the text")
+    font_color: str = Field(default="0 0 0 rg", description="RGB color code for the text")
+    font_name: Optional[str] = Field(default="F1", description="Font name for standard fonts")
+    font_file: Optional[str] = Field(None, description="Path to a .ttf font file for custom font usage")
+    page_number: int = Field(default=0, description="Page number to add text to")
+
+
+
+
+class PDFTextWritingTool(RagTool):
+    """A tool to add text to specific positions in a PDF, with custom font support."""
+    name: str = "PDF Text Writing Tool"
+    description: str = "A tool that can write text to a specific position in a PDF document, with optional custom font embedding."
+    args_schema: Type[BaseModel] = PDFTextWritingToolSchema
+
+
+    def run(self, pdf_path: str, text: str, position: tuple, font_size: int, font_color: str,
+            font_name: str = "F1", font_file: Optional[str] = None, page_number: int = 0, **kwargs) -> str:
+        reader = PdfReader(pdf_path)
+        writer = PdfWriter()
+
+
+        if page_number >= len(reader.pages):
+            return "Page number out of range."
+
+
+        page: PageObject = reader.pages[page_number]
+        content = ContentStream(page["/Contents"].data, reader)
+
+
+        if font_file:
+            # Check if the font file exists
+            if not Path(font_file).exists():
+                return "Font file does not exist."
+
+
+            # Embed the custom font
+            font_name = self.embed_font(writer, font_file)
+
+
+        # Prepare text operation with the custom or standard font
+        x_position, y_position = position
+        text_operation = f"BT /{font_name} {font_size} Tf {x_position} {y_position} Td ({text}) Tj ET"
+        content.operations.append([font_color])  # Set color
+        content.operations.append([text_operation])  # Add text
+
+
+        # Replace old content with new content
+        page[NameObject("/Contents")] = content
+        writer.add_page(page)
+
+
+        # Save the new PDF
+        output_pdf_path = "modified_output.pdf"
+        with open(output_pdf_path, "wb") as out_file:
+            writer.write(out_file)
+
+
+        return f"Text added to {output_pdf_path} successfully."
+
+
+    def embed_font(self, writer: PdfWriter, font_file: str) -> str:
+        """Embeds a TTF font into the PDF and returns the font name."""
+        with open(font_file, "rb") as file:
+            font = Font.true_type(file.read())
+        font_ref = writer.add_object(font)
+        return font_ref
+<<END TOOL: PDFTextWritingTool>>
+
+
+<<START TOOL: PGSearchTool>>
+# PGSearchTool
+
+
+## Description
+This tool is designed to facilitate semantic searches within PostgreSQL database tables. Leveraging the RAG (Retrieve and Generate) technology, the PGSearchTool provides users with an efficient means of querying database table content, specifically tailored for PostgreSQL databases. It simplifies the process of finding relevant data through semantic search queries, making it an invaluable resource for users needing to perform advanced queries on extensive datasets within a PostgreSQL database.
+
+
+## Installation
+To install the `crewai_tools` package and utilize the PGSearchTool, execute the following command in your terminal:
+
+
+```shell
+pip install 'crewai[tools]'
+```
+
+
+## Example
+Below is an example showcasing how to use the PGSearchTool to conduct a semantic search on a table within a PostgreSQL database:
+
+
+```python
+from crewai_tools import PGSearchTool
+
+
+# Initialize the tool with the database URI and the target table name
+tool = PGSearchTool(db_uri='postgresql://user:password@localhost:5432/mydatabase', table_name='employees')
+
+
+```
+
+
+## Arguments
+The PGSearchTool requires the following arguments for its operation:
+
+
+- `db_uri`: A string representing the URI of the PostgreSQL database to be queried. This argument is mandatory and must include the necessary authentication details and the location of the database.
+- `table_name`: A string specifying the name of the table within the database on which the semantic search will be performed. This argument is mandatory.
+
+
+## Custom model and embeddings
+
+
+By default, the tool uses OpenAI for both embeddings and summarization. To customize the model, you can use a config dictionary as follows:
+
+
+```python
+tool = PGSearchTool(
+    config=dict(
+        llm=dict(
+            provider="ollama", # or google, openai, anthropic, llama2, ...
+            config=dict(
+                model="llama2",
+                # temperature=0.5,
+                # top_p=1,
+                # stream=true,
+            ),
+        ),
+        embedder=dict(
+            provider="google",
+            config=dict(
+                model="models/embedding-001",
+                task_type="retrieval_document",
+                # title="Embeddings",
+            ),
+        ),
+    )
+)
+```
+from typing import Any, Type
+
+
+from embedchain.loaders.postgres import PostgresLoader
+from pydantic import BaseModel, Field
+
+
+from ..rag.rag_tool import RagTool
+
+
+
+
+class PGSearchToolSchema(BaseModel):
+    """Input for PGSearchTool."""
+
+
+    search_query: str = Field(
+        ...,
+        description="Mandatory semantic search query you want to use to search the database's content",
+    )
+
+
+
+
+class PGSearchTool(RagTool):
+    name: str = "Search a database's table content"
+    description: str = (
+        "A tool that can be used to semantic search a query from a database table's content."
+    )
+    args_schema: Type[BaseModel] = PGSearchToolSchema
+    db_uri: str = Field(..., description="Mandatory database URI")
+
+
+    def __init__(self, table_name: str, **kwargs):
+        super().__init__(**kwargs)
+        self.add(table_name)
+        self.description = f"A tool that can be used to semantic search a query the {table_name} database table's content."
+        self._generate_description()
+
+
+    def add(
+        self,
+        table_name: str,
+        **kwargs: Any,
+    ) -> None:
+        kwargs["data_type"] = "postgres"
+        kwargs["loader"] = PostgresLoader(config=dict(url=self.db_uri))
+        super().add(f"SELECT * FROM {table_name};", **kwargs)
+
+
+    def _run(
+        self,
+        search_query: str,
+        **kwargs: Any,
+    ) -> Any:
+        return super()._run(query=search_query, **kwargs)
+
+
+<<END TOOL: PGSearchTool>>
+
+
+<<START TOOL: RagTool>>
+# RagTool: A Dynamic Knowledge Base Tool
+
+
+RagTool is designed to answer questions by leveraging the power of RAG by leveraging (EmbedChain). It integrates seamlessly with the CrewAI ecosystem, offering a versatile and powerful solution for information retrieval.
+
+
+## **Overview**
+
+
+RagTool enables users to dynamically query a knowledge base, making it an ideal tool for applications requiring access to a vast array of information. Its flexible design allows for integration with various data sources, including files, directories, web pages, yoututbe videos and custom configurations.
+
+
+## **Usage**
+
+
+RagTool can be instantiated with data from different sources, including:
+
+
+- 📰 PDF file
+- 📊 CSV file
+- 📃 JSON file
+- 📝 Text
+- 📁 Directory/ Folder
+- 🌐 HTML Web page
+- 📽️ Youtube Channel
+- 📺 Youtube Video
+- 📚 Docs website
+- 📝 MDX file
+- 📄 DOCX file
+- 🧾 XML file
+- 📬 Gmail
+- 📝 Github
+- 🐘 Postgres
+- 🐬 MySQL
+- 🤖 Slack
+- 💬 Discord
+- 🗨️ Discourse
+- 📝 Substack
+- 🐝 Beehiiv
+- 💾 Dropbox
+- 🖼️ Image
+- ⚙️ Custom
+
+
+#### **Creating an Instance**
+
+
+```python
+from crewai_tools.tools.rag_tool import RagTool
+
+
+# Example: Loading from a file
+rag_tool = RagTool().from_file('path/to/your/file.txt')
+
+
+# Example: Loading from a directory
+rag_tool = RagTool().from_directory('path/to/your/directory')
+
+
+# Example: Loading from a web page
+rag_tool = RagTool().from_web_page('https://example.com')
+```
+
+
+## **Contribution**
+
+
+Contributions to RagTool and the broader CrewAI tools ecosystem are welcome. To contribute, please follow the standard GitHub workflow for forking the repository, making changes, and submitting a pull request.
+
+
+## **License**
+
+
+RagTool is open-source and available under the MIT license.
+
+
+Thank you for considering RagTool for your knowledge base needs. Your contributions and feedback are invaluable to making RagTool even better.
+
+
+from abc import ABC, abstractmethod
+from typing import Any
+
+
+from pydantic import BaseModel, Field, model_validator
+
+
+from crewai_tools.tools.base_tool import BaseTool
+
+
+
+
+class Adapter(BaseModel, ABC):
+    class Config:
+        arbitrary_types_allowed = True
+
+
+    @abstractmethod
+    def query(self, question: str) -> str:
+        """Query the knowledge base with a question and return the answer."""
+
+
+    @abstractmethod
+    def add(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        """Add content to the knowledge base."""
+
+
+
+
+class RagTool(BaseTool):
+    class _AdapterPlaceholder(Adapter):
+        def query(self, question: str) -> str:
+            raise NotImplementedError
+
+
+        def add(self, *args: Any, **kwargs: Any) -> None:
+            raise NotImplementedError
+
+
+    name: str = "Knowledge base"
+    description: str = "A knowledge base that can be used to answer questions."
+    summarize: bool = False
+    adapter: Adapter = Field(default_factory=_AdapterPlaceholder)
+    config: dict[str, Any] | None = None
+
+
+    @model_validator(mode="after")
+    def _set_default_adapter(self):
+        if isinstance(self.adapter, RagTool._AdapterPlaceholder):
+            from embedchain import App
+
+
+            from crewai_tools.adapters.embedchain_adapter import EmbedchainAdapter
+
+
+            app = App.from_config(config=self.config) if self.config else App()
+            self.adapter = EmbedchainAdapter(
+                embedchain_app=app, summarize=self.summarize
+            )
+
+
+        return self
+
+
+    def add(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        self.adapter.add(*args, **kwargs)
+
+
+    def _run(
+        self,
+        query: str,
+        **kwargs: Any,
+    ) -> Any:
+        self._before_run(query, **kwargs)
+
+
+        return f"Relevant Content:\n{self.adapter.query(query)}"
+
+
+    def _before_run(self, query, **kwargs):
+        pass
+
+
+<<END TOOL: RagTool>>
+
+
+<<START TOOL: ScrapeElementFromWebsite>>
+import os
+from typing import Any, Optional, Type
+
+
+import requests
+from bs4 import BeautifulSoup
+from pydantic import BaseModel, Field
+
+
+from ..base_tool import BaseTool
+
+
+
+
+class FixedScrapeElementFromWebsiteToolSchema(BaseModel):
+    """Input for ScrapeElementFromWebsiteTool."""
+
+
+    pass
+
+
+
+
+class ScrapeElementFromWebsiteToolSchema(FixedScrapeElementFromWebsiteToolSchema):
+    """Input for ScrapeElementFromWebsiteTool."""
+
+
+    website_url: str = Field(..., description="Mandatory website url to read the file")
+    css_element: str = Field(
+        ...,
+        description="Mandatory css reference for element to scrape from the website",
+    )
+
+
+
+
+class ScrapeElementFromWebsiteTool(BaseTool):
+    name: str = "Read a website content"
+    description: str = "A tool that can be used to read a website content."
+    args_schema: Type[BaseModel] = ScrapeElementFromWebsiteToolSchema
+    website_url: Optional[str] = None
+    cookies: Optional[dict] = None
+    css_element: Optional[str] = None
+    headers: Optional[dict] = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.google.com/",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Accept-Encoding": "gzip, deflate, br",
+    }
+
+
+    def __init__(
+        self,
+        website_url: Optional[str] = None,
+        cookies: Optional[dict] = None,
+        css_element: Optional[str] = None,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        if website_url is not None:
+            self.website_url = website_url
+            self.css_element = css_element
+            self.description = (
+                f"A tool that can be used to read {website_url}'s content."
+            )
+            self.args_schema = FixedScrapeElementFromWebsiteToolSchema
+            self._generate_description()
+            if cookies is not None:
+                self.cookies = {cookies["name"]: os.getenv(cookies["value"])}
+
+
+    def _run(
+        self,
+        **kwargs: Any,
+    ) -> Any:
+        website_url = kwargs.get("website_url", self.website_url)
+        css_element = kwargs.get("css_element", self.css_element)
+        page = requests.get(
+            website_url,
+            headers=self.headers,
+            cookies=self.cookies if self.cookies else {},
+        )
+        parsed = BeautifulSoup(page.content, "html.parser")
+        elements = parsed.select(css_element)
+        return "\n".join([element.get_text() for element in elements])
+
+
+<<END TOOL: ScrapeElementFromWebsite>>
+
+
+<<START TOOL: ScrapeWebsiteTool>>
+# ScrapeWebsiteTool
+
+
+## Description
+A tool designed to extract and read the content of a specified website. It is capable of handling various types of web pages by making HTTP requests and parsing the received HTML content. This tool can be particularly useful for web scraping tasks, data collection, or extracting specific information from websites.
+
+
+## Installation
+Install the crewai_tools package
+```shell
+pip install 'crewai[tools]'
+```
+
+
+## Example
+```python
+from crewai_tools import ScrapeWebsiteTool
+
+
+# To enable scrapping any website it finds during it's execution
+tool = ScrapeWebsiteTool()
+
+
+# Initialize the tool with the website URL, so the agent can only scrap the content of the specified website
+tool = ScrapeWebsiteTool(website_url='https://www.example.com')
+```
+
+
+## Arguments
+- `website_url` : Mandatory website URL to read the file. This is the primary input for the tool, specifying which website's content should be scraped and read.
+
+
+import os
+from typing import Any, Optional, Type
+
+
+import requests
+from bs4 import BeautifulSoup
+from pydantic import BaseModel, Field
+
+
+from ..base_tool import BaseTool
+
+
+
+
+class FixedScrapeWebsiteToolSchema(BaseModel):
+    """Input for ScrapeWebsiteTool."""
+
+
+    pass
+
+
+
+
+class ScrapeWebsiteToolSchema(FixedScrapeWebsiteToolSchema):
+    """Input for ScrapeWebsiteTool."""
+
+
+    website_url: str = Field(..., description="Mandatory website url to read the file")
+
+
+
+
+class ScrapeWebsiteTool(BaseTool):
+    name: str = "Read website content"
+    description: str = "A tool that can be used to read a website content."
+    args_schema: Type[BaseModel] = ScrapeWebsiteToolSchema
+    website_url: Optional[str] = None
+    cookies: Optional[dict] = None
+    headers: Optional[dict] = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.google.com/",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+    }
+
+
+    def __init__(
+        self,
+        website_url: Optional[str] = None,
+        cookies: Optional[dict] = None,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        if website_url is not None:
+            self.website_url = website_url
+            self.description = (
+                f"A tool that can be used to read {website_url}'s content."
+            )
+            self.args_schema = FixedScrapeWebsiteToolSchema
+            self._generate_description()
+            if cookies is not None:
+                self.cookies = {cookies["name"]: os.getenv(cookies["value"])}
+
+
+    def _run(
+        self,
+        **kwargs: Any,
+    ) -> Any:
+        website_url = kwargs.get("website_url", self.website_url)
+        page = requests.get(
+            website_url,
+            timeout=15,
+            headers=self.headers,
+            cookies=self.cookies if self.cookies else {},
+        )
+
+
+        page.encoding = page.apparent_encoding
+        parsed = BeautifulSoup(page.text, "html.parser")
+
+
+        text = parsed.get_text()
+        text = "\n".join([i for i in text.split("\n") if i.strip() != ""])
+        text = " ".join([i for i in text.split(" ") if i.strip() != ""])
+        return text
+
+
+<<END TOOL: ScrapeWebsiteTool>>
+
+
+<<START TOOL: ScrapflyScrapeWebsiteTool>>
+# ScrapflyScrapeWebsiteTool
+
+
+## Description
+[ScrapFly](https://scrapfly.io/) is a web scraping API with headless browser capabilities, proxies, and anti-bot bypass. It allows for extracting web page data into accessible LLM markdown or text.
+
+
+## Setup and Installation
+1. **Install ScrapFly Python SDK**: Install `scrapfly-sdk` Python package is installed to use the ScrapFly Web Loader. Install it via pip with the following command:
+
+
+   ```bash
+   pip install scrapfly-sdk
+   ```
+
+
+2. **API Key**: Register for free from [scrapfly.io/register](https://www.scrapfly.io/register/) to obtain your API key.
+
+
+## Example Usage
+
+
+Utilize the ScrapflyScrapeWebsiteTool as follows to retrieve a web page data as text, markdown (LLM accissible) or HTML:
+
+
+```python
+from crewai_tools import ScrapflyScrapeWebsiteTool
+
+
+tool = ScrapflyScrapeWebsiteTool(
+    api_key="Your ScrapFly API key"
+)
+
+
+result = tool._run(
+    url="https://web-scraping.dev/products",
+    scrape_format="markdown",
+    ignore_scrape_failures=True
+)
+```
+
+
+## Additional Arguments
+The ScrapflyScrapeWebsiteTool also allows passigng ScrapeConfig object for customizing the scrape request. See the [API params documentation](https://scrapfly.io/docs/scrape-api/getting-started) for the full feature details and their API params:
+```python
+from crewai_tools import ScrapflyScrapeWebsiteTool
+
+
+tool = ScrapflyScrapeWebsiteTool(
+    api_key="Your ScrapFly API key"
+)
+
+
+scrapfly_scrape_config = {
+    "asp": True, # Bypass scraping blocking and solutions, like Cloudflare
+    "render_js": True, # Enable JavaScript rendering with a cloud headless browser
+    "proxy_pool": "public_residential_pool", # Select a proxy pool (datacenter or residnetial)
+    "country": "us", # Select a proxy location
+    "auto_scroll": True, # Auto scroll the page
+    "js": "" # Execute custom JavaScript code by the headless browser
+}
+
+
+result = tool._run(
+    url="https://web-scraping.dev/products",
+    scrape_format="markdown",
+    ignore_scrape_failures=True,
+    scrape_config=scrapfly_scrape_config
+)
+```
+import logging
+from typing import Any, Dict, Literal, Optional, Type
+
+
+from pydantic import BaseModel, Field
+
+
+from crewai_tools.tools.base_tool import BaseTool
+
+
+logger = logging.getLogger(__file__)
+
+
+
+
+class ScrapflyScrapeWebsiteToolSchema(BaseModel):
+    url: str = Field(description="Webpage URL")
+    scrape_format: Optional[Literal["raw", "markdown", "text"]] = Field(
+        default="markdown", description="Webpage extraction format"
+    )
+    scrape_config: Optional[Dict[str, Any]] = Field(
+        default=None, description="Scrapfly request scrape config"
+    )
+    ignore_scrape_failures: Optional[bool] = Field(
+        default=None, description="whether to ignore failures"
+    )
+
+
+
+
+class ScrapflyScrapeWebsiteTool(BaseTool):
+    name: str = "Scrapfly web scraping API tool"
+    description: str = (
+        "Scrape a webpage url using Scrapfly and return its content as markdown or text"
+    )
+    args_schema: Type[BaseModel] = ScrapflyScrapeWebsiteToolSchema
+    api_key: str = None
+    scrapfly: Optional[Any] = None
+
+
+    def __init__(self, api_key: str):
+        super().__init__()
+        try:
+            from scrapfly import ScrapflyClient
+        except ImportError:
+            raise ImportError(
+                "`scrapfly` package not found, please run `pip install scrapfly-sdk`"
+            )
+        self.scrapfly = ScrapflyClient(key=api_key)
+
+
+    def _run(
+        self,
+        url: str,
+        scrape_format: str = "markdown",
+        scrape_config: Optional[Dict[str, Any]] = None,
+        ignore_scrape_failures: Optional[bool] = None,
+    ):
+        from scrapfly import ScrapeApiResponse, ScrapeConfig
+
+
+        scrape_config = scrape_config if scrape_config is not None else {}
+        try:
+            response: ScrapeApiResponse = self.scrapfly.scrape(
+                ScrapeConfig(url, format=scrape_format, **scrape_config)
+            )
+            return response.scrape_result["content"]
+        except Exception as e:
+            if ignore_scrape_failures:
+                logger.error(f"Error fetching data from {url}, exception: {e}")
+                return None
+            else:
+                raise e
+
+
+<<END TOOL: ScrapflyScrapeWebsiteTool>>
+
+
+<<START TOOL: SeleniumScrapingTool>>
+# SeleniumScrapingTool
+
+
+## Description
+This tool is designed for efficient web scraping, enabling users to extract content from web pages. It supports targeted scraping by allowing the specification of a CSS selector for desired elements. The flexibility of the tool enables it to be used on any website URL provided by the user, making it a versatile tool for various web scraping needs.
+
+
+## Installation
+Install the crewai_tools package
+```
+pip install 'crewai[tools]'
+```
+
+
+## Example
+```python
+from crewai_tools import SeleniumScrapingTool
+
+
+# Example 1: Scrape any website it finds during its execution
+tool = SeleniumScrapingTool()
+
+
+# Example 2: Scrape the entire webpage
+tool = SeleniumScrapingTool(website_url='https://example.com')
+
+
+# Example 3: Scrape a specific CSS element from the webpage
+tool = SeleniumScrapingTool(website_url='https://example.com', css_element='.main-content')
+
+
+# Example 4: Scrape using optional parameters for customized scraping
+tool = SeleniumScrapingTool(website_url='https://example.com', css_element='.main-content', cookie={'name': 'user', 'value': 'John Doe'})
+```
+
+
+## Arguments
+- `website_url`: Mandatory. The URL of the website to scrape.
+- `css_element`: Mandatory. The CSS selector for a specific element to scrape from the website.
+- `cookie`: Optional. A dictionary containing cookie information. This parameter allows the tool to simulate a session with cookie information, providing access to content that may be restricted to logged-in users.
+- `wait_time`: Optional. The number of seconds the tool waits after loading the website and after setting a cookie, before scraping the content. This allows for dynamic content to load properly.
+
+
+import time
+from typing import Any, Optional, Type
+
+
+from bs4 import BeautifulSoup
+from pydantic import BaseModel, Field
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+
+
+from ..base_tool import BaseTool
+
+
+
+
+class FixedSeleniumScrapingToolSchema(BaseModel):
+    """Input for SeleniumScrapingTool."""
+
+
+    pass
+
+
+
+
+class SeleniumScrapingToolSchema(FixedSeleniumScrapingToolSchema):
+    """Input for SeleniumScrapingTool."""
+
+
+    website_url: str = Field(..., description="Mandatory website url to read the file")
+    css_element: str = Field(
+        ...,
+        description="Mandatory css reference for element to scrape from the website",
+    )
+
+
+
+
+class SeleniumScrapingTool(BaseTool):
+    name: str = "Read a website content"
+    description: str = "A tool that can be used to read a website content."
+    args_schema: Type[BaseModel] = SeleniumScrapingToolSchema
+    website_url: Optional[str] = None
+    driver: Optional[Any] = webdriver.Chrome
+    cookie: Optional[dict] = None
+    wait_time: Optional[int] = 3
+    css_element: Optional[str] = None
+
+
+    def __init__(
+        self,
+        website_url: Optional[str] = None,
+        cookie: Optional[dict] = None,
+        css_element: Optional[str] = None,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        if cookie is not None:
+            self.cookie = cookie
+
+
+        if css_element is not None:
+            self.css_element = css_element
+
+
+        if website_url is not None:
+            self.website_url = website_url
+            self.description = (
+                f"A tool that can be used to read {website_url}'s content."
+            )
+            self.args_schema = FixedSeleniumScrapingToolSchema
+
+
+        self._generate_description()
+
+
+    def _run(
+        self,
+        **kwargs: Any,
+    ) -> Any:
+        website_url = kwargs.get("website_url", self.website_url)
+        css_element = kwargs.get("css_element", self.css_element)
+        driver = self._create_driver(website_url, self.cookie, self.wait_time)
+
+
+        content = []
+        if css_element is None or css_element.strip() == "":
+            body_text = driver.find_element(By.TAG_NAME, "body").text
+            content.append(body_text)
+        else:
+            for element in driver.find_elements(By.CSS_SELECTOR, css_element):
+                content.append(element.text)
+        driver.close()
+        return "\n".join(content)
+
+
+    def _create_driver(self, url, cookie, wait_time):
+        options = Options()
+        options.add_argument("--headless")
+        driver = self.driver(options=options)
+        driver.get(url)
+        time.sleep(wait_time)
+        if cookie:
+            driver.add_cookie(cookie)
+            time.sleep(wait_time)
+            driver.get(url)
+            time.sleep(wait_time)
+        return driver
+
+
+    def close(self):
+        self.driver.close()
+
+
+<<END TOOL: SeleniumScrapingTool>>
+
+
+<<START TOOL: SerperDevTool>>
+# SerperDevTool Documentation
+
+
+## Description
+This tool is designed to perform a semantic search for a specified query from a text's content across the internet. It utilizes the `serper.dev` API to fetch and display the most relevant search results based on the query provided by the user.
+
+
+## Installation
+To incorporate this tool into your project, follow the installation instructions below:
+```shell
+pip install 'crewai[tools]'
+```
+
+
+## Example
+The following example demonstrates how to initialize the tool and execute a search with a given query:
+
+
+```python
+from crewai_tools import SerperDevTool
+
+
+# Initialize the tool for internet searching capabilities
+tool = SerperDevTool()
+```
+
+
+## Steps to Get Started
+To effectively use the `SerperDevTool`, follow these steps:
+
+
+1. **Package Installation**: Confirm that the `crewai[tools]` package is installed in your Python environment.
+2. **API Key Acquisition**: Acquire a `serper.dev` API key by registering for a free account at `serper.dev`.
+3. **Environment Configuration**: Store your obtained API key in an environment variable named `SERPER_API_KEY` to facilitate its use by the tool.
+
+
+## Conclusion
+By integrating the `SerperDevTool` into Python projects, users gain the ability to conduct real-time, relevant searches across the internet directly from their applications. By adhering to the setup and usage guidelines provided, incorporating this tool into projects is streamlined and straightforward.
+import datetime
+import json
+import os
+from typing import Any, Optional, Type
+
+
+import requests
+from pydantic import BaseModel, Field
+
+
+from crewai_tools.tools.base_tool import BaseTool
+
+
+
+
+def _save_results_to_file(content: str) -> None:
+    """Saves the search results to a file."""
+    filename = f"search_results_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.txt"
+    with open(filename, "w") as file:
+        file.write(content)
+    print(f"Results saved to {filename}")
+
+
+
+
+class SerperDevToolSchema(BaseModel):
+    """Input for SerperDevTool."""
+
+
+    search_query: str = Field(
+        ..., description="Mandatory search query you want to use to search the internet"
+    )
+
+
+
+
+class SerperDevTool(BaseTool):
+    name: str = "Search the internet"
+    description: str = (
+        "A tool that can be used to search the internet with a search_query."
+    )
+    args_schema: Type[BaseModel] = SerperDevToolSchema
+    search_url: str = "https://google.serper.dev/search"
+    country: Optional[str] = ""
+    location: Optional[str] = ""
+    locale: Optional[str] = ""
+    n_results: int = 10
+    save_file: bool = False
+
+
+    def _run(
+        self,
+        **kwargs: Any,
+    ) -> Any:
+
+
+        search_query = kwargs.get("search_query") or kwargs.get("query")
+        save_file = kwargs.get("save_file", self.save_file)
+        n_results = kwargs.get("n_results", self.n_results)
+
+
+        payload = {"q": search_query, "num": n_results}
+
+
+        if self.country != "":
+            payload["gl"] = self.country
+        if self.location != "":
+            payload["location"] = self.location
+        if self.locale != "":
+            payload["hl"] = self.locale
+
+
+        payload = json.dumps(payload)
+
+
+        headers = {
+            "X-API-KEY": os.environ["SERPER_API_KEY"],
+            "content-type": "application/json",
+        }
+
+
+        response = requests.request(
+            "POST", self.search_url, headers=headers, data=payload
+        )
+        results = response.json()
+
+
+        if "organic" in results:
+            results = results["organic"][: self.n_results]
+            string = []
+            for result in results:
+                try:
+                    string.append(
+                        "\n".join(
+                            [
+                                f"Title: {result['title']}",
+                                f"Link: {result['link']}",
+                                f"Snippet: {result['snippet']}",
+                                "---",
+                            ]
+                        )
+                    )
+                except KeyError:
+                    continue
+
+
+            content = "\n".join(string)
+            if save_file:
+                _save_results_to_file(content)
+            return f"\nSearch results: {content}\n"
+        else:
+            return results
+
+
+<<END TOOL: SerperDevTool>>
+
+
+<<START TOOL: Serply APITool>>
+# Serply API Documentation
+
+
+## Description
+This tool is designed to perform a web/news/scholar search for a specified query from a text's content across the internet. It utilizes the [Serply.io](https://serply.io) API to fetch and display the most relevant search results based on the query provided by the user.
+
+
+## Installation
+
+
+To incorporate this tool into your project, follow the installation instructions below:
+```shell
+pip install 'crewai[tools]'
+```
+
+
+## Examples
+
+
+## Web Search
+The following example demonstrates how to initialize the tool and execute a search the web with a given query:
+
+
+```python
+from crewai_tools import SerplyWebSearchTool
+
+
+# Initialize the tool for internet searching capabilities
+tool = SerplyWebSearchTool()
+
+
+# increase search limits to 100 results
+tool = SerplyWebSearchTool(limit=100)
+
+
+
+
+# change results language (fr - French)
+tool = SerplyWebSearchTool(hl="fr")
+```
+
+
+## News Search
+The following example demonstrates how to initialize the tool and execute a search news with a given query:
+
+
+```python
+from crewai_tools import SerplyNewsSearchTool
+
+
+# Initialize the tool for internet searching capabilities
+tool = SerplyNewsSearchTool()
+
+
+# change country news (JP - Japan)
+tool = SerplyNewsSearchTool(proxy_location="JP")
+```
+
+
+## Scholar Search
+The following example demonstrates how to initialize the tool and execute a search scholar articles a given query:
+
+
+```python
+from crewai_tools import SerplyScholarSearchTool
+
+
+# Initialize the tool for internet searching capabilities
+tool = SerplyScholarSearchTool()
+
+
+# change country news (GB - Great Britain)
+tool = SerplyScholarSearchTool(proxy_location="GB")
+```
+
+
+## Job Search
+The following example demonstrates how to initialize the tool and searching for jobs in the USA:
+
+
+```python
+from crewai_tools import SerplyJobSearchTool
+
+
+# Initialize the tool for internet searching capabilities
+tool = SerplyJobSearchTool()
+```
+
+
+
+
+## Web Page To Markdown
+The following example demonstrates how to initialize the tool and fetch a web page and convert it to markdown:
+
+
+```python
+from crewai_tools import SerplyWebpageToMarkdownTool
+
+
+# Initialize the tool for internet searching capabilities
+tool = SerplyWebpageToMarkdownTool()
+
+
+# change country make request from (DE - Germany)
+tool = SerplyWebpageToMarkdownTool(proxy_location="DE")
+```
+
+
+## Combining Multiple Tools
+
+
+The following example demonstrates performing a Google search to find relevant articles. Then, convert those articles to markdown format for easier extraction of key points.
+
+
+```python
+from crewai import Agent
+from crewai_tools import SerplyWebSearchTool, SerplyWebpageToMarkdownTool
+
+
+search_tool = SerplyWebSearchTool()
+convert_to_markdown = SerplyWebpageToMarkdownTool()
+
+
+# Creating a senior researcher agent with memory and verbose mode
+researcher = Agent(
+  role='Senior Researcher',
+  goal='Uncover groundbreaking technologies in {topic}',
+  verbose=True,
+  memory=True,
+  backstory=(
+    "Driven by curiosity, you're at the forefront of"
+    "innovation, eager to explore and share knowledge that could change"
+    "the world."
+  ),
+  tools=[search_tool, convert_to_markdown],
+  allow_delegation=True
+)
+```
+
+
+## Steps to Get Started
+To effectively use the `SerplyApiTool`, follow these steps:
+
+
+1. **Package Installation**: Confirm that the `crewai[tools]` package is installed in your Python environment.
+2. **API Key Acquisition**: Acquire a `serper.dev` API key by registering for a free account at [Serply.io](https://serply.io).
+3. **Environment Configuration**: Store your obtained API key in an environment variable named `SERPLY_API_KEY` to facilitate its use by the tool.
+
+
+## Conclusion
+By integrating the `SerplyApiTool` into Python projects, users gain the ability to conduct real-time searches, relevant news across the internet directly from their applications. By adhering to the setup and usage guidelines provided, incorporating this tool into projects is streamlined and straightforward.
+
+
+import os
+from typing import Any, Optional, Type
+from urllib.parse import urlencode
+
+
+import requests
+from pydantic import BaseModel, Field
+
+
+from crewai_tools.tools.rag.rag_tool import RagTool
+
+
+
+
+class SerplyJobSearchToolSchema(BaseModel):
+    """Input for Job Search."""
+
+
+    search_query: str = Field(
+        ...,
+        description="Mandatory search query you want to use to fetch jobs postings.",
+    )
+
+
+
+
+class SerplyJobSearchTool(RagTool):
+    name: str = "Job Search"
+    description: str = (
+        "A tool to perform to perform a job search in the US with a search_query."
+    )
+    args_schema: Type[BaseModel] = SerplyJobSearchToolSchema
+    request_url: str = "https://api.serply.io/v1/job/search/"
+    proxy_location: Optional[str] = "US"
+    """
+        proxy_location: (str): Where to get jobs, specifically for a specific country results.
+            - Currently only supports US
+    """
+    headers: Optional[dict] = {}
+
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.headers = {
+            "X-API-KEY": os.environ["SERPLY_API_KEY"],
+            "User-Agent": "crew-tools",
+            "X-Proxy-Location": self.proxy_location,
+        }
+
+
+    def _run(
+        self,
+        **kwargs: Any,
+    ) -> Any:
+        query_payload = {}
+
+
+        if "query" in kwargs:
+            query_payload["q"] = kwargs["query"]
+        elif "search_query" in kwargs:
+            query_payload["q"] = kwargs["search_query"]
+
+
+        # build the url
+        url = f"{self.request_url}{urlencode(query_payload)}"
+
+
+        response = requests.request("GET", url, headers=self.headers)
+
+
+        jobs = response.json().get("jobs", "")
+
+
+        if not jobs:
+            return ""
+
+
+        string = []
+        for job in jobs:
+            try:
+                string.append(
+                    "\n".join(
+                        [
+                            f"Position: {job['position']}",
+                            f"Employer: {job['employer']}",
+                            f"Location: {job['location']}",
+                            f"Link: {job['link']}",
+                            f"""Highest: {', '.join([h for h in job['highlights']])}""",
+                            f"Is Remote: {job['is_remote']}",
+                            f"Is Hybrid: {job['is_remote']}",
+                            "---",
+                        ]
+                    )
+                )
+            except KeyError:
+                continue
+
+
+        content = "\n".join(string)
+        return f"\nSearch results: {content}\n"
+
+
+import os
+from typing import Any, Optional, Type
+from urllib.parse import urlencode
+
+
+import requests
+from pydantic import BaseModel, Field
+
+
+from crewai_tools.tools.base_tool import BaseTool
+
+
+
+
+class SerplyNewsSearchToolSchema(BaseModel):
+    """Input for Serply News Search."""
+
+
+    search_query: str = Field(
+        ..., description="Mandatory search query you want to use to fetch news articles"
+    )
+
+
+
+
+class SerplyNewsSearchTool(BaseTool):
+    name: str = "News Search"
+    description: str = "A tool to perform News article search with a search_query."
+    args_schema: Type[BaseModel] = SerplyNewsSearchToolSchema
+    search_url: str = "https://api.serply.io/v1/news/"
+    proxy_location: Optional[str] = "US"
+    headers: Optional[dict] = {}
+    limit: Optional[int] = 10
+
+
+    def __init__(
+        self, limit: Optional[int] = 10, proxy_location: Optional[str] = "US", **kwargs
+    ):
+        """
+        param: limit (int): The maximum number of results to return [10-100, defaults to 10]
+        proxy_location: (str): Where to get news, specifically for a specific country results.
+             ['US', 'CA', 'IE', 'GB', 'FR', 'DE', 'SE', 'IN', 'JP', 'KR', 'SG', 'AU', 'BR'] (defaults to US)
+        """
+        super().__init__(**kwargs)
+        self.limit = limit
+        self.proxy_location = proxy_location
+        self.headers = {
+            "X-API-KEY": os.environ["SERPLY_API_KEY"],
+            "User-Agent": "crew-tools",
+            "X-Proxy-Location": proxy_location,
+        }
+
+
+    def _run(
+        self,
+        **kwargs: Any,
+    ) -> Any:
+        # build query parameters
+        query_payload = {}
+
+
+        if "query" in kwargs:
+            query_payload["q"] = kwargs["query"]
+        elif "search_query" in kwargs:
+            query_payload["q"] = kwargs["search_query"]
+
+
+        # build the url
+        url = f"{self.search_url}{urlencode(query_payload)}"
+
+
+        response = requests.request("GET", url, headers=self.headers)
+        results = response.json()
+        if "entries" in results:
+            results = results["entries"]
+            string = []
+            for result in results[: self.limit]:
+                try:
+                    # follow url
+                    r = requests.get(result["link"])
+                    final_link = r.history[-1].headers["Location"]
+                    string.append(
+                        "\n".join(
+                            [
+                                f"Title: {result['title']}",
+                                f"Link: {final_link}",
+                                f"Source: {result['source']['title']}",
+                                f"Published: {result['published']}",
+                                "---",
+                            ]
+                        )
+                    )
+                except KeyError:
+                    continue
+
+
+            content = "\n".join(string)
+            return f"\nSearch results: {content}\n"
+        else:
+            return results
+
+
+import os
+from typing import Any, Optional, Type
+from urllib.parse import urlencode
+
+
+import requests
+from pydantic import BaseModel, Field
+
+
+from crewai_tools.tools.base_tool import BaseTool
+
+
+
+
+class SerplyScholarSearchToolSchema(BaseModel):
+    """Input for Serply Scholar Search."""
+
+
+    search_query: str = Field(
+        ...,
+        description="Mandatory search query you want to use to fetch scholarly literature",
+    )
+
+
+
+
+class SerplyScholarSearchTool(BaseTool):
+    name: str = "Scholar Search"
+    description: str = (
+        "A tool to perform scholarly literature search with a search_query."
+    )
+    args_schema: Type[BaseModel] = SerplyScholarSearchToolSchema
+    search_url: str = "https://api.serply.io/v1/scholar/"
+    hl: Optional[str] = "us"
+    proxy_location: Optional[str] = "US"
+    headers: Optional[dict] = {}
+
+
+    def __init__(self, hl: str = "us", proxy_location: Optional[str] = "US", **kwargs):
+        """
+        param: hl (str): host Language code to display results in
+            (reference https://developers.google.com/custom-search/docs/xml_results?hl=en#wsInterfaceLanguages)
+        proxy_location: (str): Specify the proxy location for the search, specifically for a specific country results.
+             ['US', 'CA', 'IE', 'GB', 'FR', 'DE', 'SE', 'IN', 'JP', 'KR', 'SG', 'AU', 'BR'] (defaults to US)
+        """
+        super().__init__(**kwargs)
+        self.hl = hl
+        self.proxy_location = proxy_location
+        self.headers = {
+            "X-API-KEY": os.environ["SERPLY_API_KEY"],
+            "User-Agent": "crew-tools",
+            "X-Proxy-Location": proxy_location,
+        }
+
+
+    def _run(
+        self,
+        **kwargs: Any,
+    ) -> Any:
+        query_payload = {"hl": self.hl}
+
+
+        if "query" in kwargs:
+            query_payload["q"] = kwargs["query"]
+        elif "search_query" in kwargs:
+            query_payload["q"] = kwargs["search_query"]
+
+
+        # build the url
+        url = f"{self.search_url}{urlencode(query_payload)}"
+
+
+        response = requests.request("GET", url, headers=self.headers)
+        articles = response.json().get("articles", "")
+
+
+        if not articles:
+            return ""
+
+
+        string = []
+        for article in articles:
+            try:
+                if "doc" in article:
+                    link = article["doc"]["link"]
+                else:
+                    link = article["link"]
+                authors = [author["name"] for author in article["author"]["authors"]]
+                string.append(
+                    "\n".join(
+                        [
+                            f"Title: {article['title']}",
+                            f"Link: {link}",
+                            f"Description: {article['description']}",
+                            f"Cite: {article['cite']}",
+                            f"Authors: {', '.join(authors)}",
+                            "---",
+                        ]
+                    )
+                )
+            except KeyError:
+                continue
+
+
+        content = "\n".join(string)
+        return f"\nSearch results: {content}\n"
+
+
+import os
+from typing import Any, Optional, Type
+from urllib.parse import urlencode
+
+
+import requests
+from pydantic import BaseModel, Field
+
+
+from crewai_tools.tools.base_tool import BaseTool
+
+
+
+
+class SerplyWebSearchToolSchema(BaseModel):
+    """Input for Serply Web Search."""
+
+
+    search_query: str = Field(
+        ..., description="Mandatory search query you want to use to Google search"
+    )
+
+
+
+
+class SerplyWebSearchTool(BaseTool):
+    name: str = "Google Search"
+    description: str = "A tool to perform Google search with a search_query."
+    args_schema: Type[BaseModel] = SerplyWebSearchToolSchema
+    search_url: str = "https://api.serply.io/v1/search/"
+    hl: Optional[str] = "us"
+    limit: Optional[int] = 10
+    device_type: Optional[str] = "desktop"
+    proxy_location: Optional[str] = "US"
+    query_payload: Optional[dict] = {}
+    headers: Optional[dict] = {}
+
+
+    def __init__(
+        self,
+        hl: str = "us",
+        limit: int = 10,
+        device_type: str = "desktop",
+        proxy_location: str = "US",
+        **kwargs,
+    ):
+        """
+        param: query (str): The query to search for
+        param: hl (str): host Language code to display results in
+            (reference https://developers.google.com/custom-search/docs/xml_results?hl=en#wsInterfaceLanguages)
+        param: limit (int): The maximum number of results to return [10-100, defaults to 10]
+        param: device_type (str): desktop/mobile results (defaults to desktop)
+        proxy_location: (str): Where to perform the search, specifically for local/regional results.
+             ['US', 'CA', 'IE', 'GB', 'FR', 'DE', 'SE', 'IN', 'JP', 'KR', 'SG', 'AU', 'BR'] (defaults to US)
+        """
+        super().__init__(**kwargs)
+
+
+        self.limit = limit
+        self.device_type = device_type
+        self.proxy_location = proxy_location
+
+
+        # build query parameters
+        self.query_payload = {
+            "num": limit,
+            "gl": proxy_location.upper(),
+            "hl": hl.lower(),
+        }
+        self.headers = {
+            "X-API-KEY": os.environ["SERPLY_API_KEY"],
+            "X-User-Agent": device_type,
+            "User-Agent": "crew-tools",
+            "X-Proxy-Location": proxy_location,
+        }
+
+
+    def _run(
+        self,
+        **kwargs: Any,
+    ) -> Any:
+        if "query" in kwargs:
+            self.query_payload["q"] = kwargs["query"]
+        elif "search_query" in kwargs:
+            self.query_payload["q"] = kwargs["search_query"]
+
+
+        # build the url
+        url = f"{self.search_url}{urlencode(self.query_payload)}"
+
+
+        response = requests.request("GET", url, headers=self.headers)
+        results = response.json()
+        if "results" in results:
+            results = results["results"]
+            string = []
+            for result in results:
+                try:
+                    string.append(
+                        "\n".join(
+                            [
+                                f"Title: {result['title']}",
+                                f"Link: {result['link']}",
+                                f"Description: {result['description'].strip()}",
+                                "---",
+                            ]
+                        )
+                    )
+                except KeyError:
+                    continue
+
+
+            content = "\n".join(string)
+            return f"\nSearch results: {content}\n"
+        else:
+            return results
+
+
+import os
+from typing import Any, Optional, Type
+
+
+import requests
+from pydantic import BaseModel, Field
+
+
+from crewai_tools.tools.rag.rag_tool import RagTool
+
+
+
+
+class SerplyWebpageToMarkdownToolSchema(BaseModel):
+    """Input for Serply Search."""
+
+
+    url: str = Field(
+        ...,
+        description="Mandatory url you want to use to fetch and convert to markdown",
+    )
+
+
+
+
+class SerplyWebpageToMarkdownTool(RagTool):
+    name: str = "Webpage to Markdown"
+    description: str = (
+        "A tool to perform convert a webpage to markdown to make it easier for LLMs to understand"
+    )
+    args_schema: Type[BaseModel] = SerplyWebpageToMarkdownToolSchema
+    request_url: str = "https://api.serply.io/v1/request"
+    proxy_location: Optional[str] = "US"
+    headers: Optional[dict] = {}
+
+
+    def __init__(self, proxy_location: Optional[str] = "US", **kwargs):
+        """
+        proxy_location: (str): Where to perform the search, specifically for a specific country results.
+             ['US', 'CA', 'IE', 'GB', 'FR', 'DE', 'SE', 'IN', 'JP', 'KR', 'SG', 'AU', 'BR'] (defaults to US)
+        """
+        super().__init__(**kwargs)
+        self.proxy_location = proxy_location
+        self.headers = {
+            "X-API-KEY": os.environ["SERPLY_API_KEY"],
+            "User-Agent": "crew-tools",
+            "X-Proxy-Location": proxy_location,
+        }
+
+
+    def _run(
+        self,
+        **kwargs: Any,
+    ) -> Any:
+        data = {"url": kwargs["url"], "method": "GET", "response_type": "markdown"}
+        response = requests.request(
+            "POST", self.request_url, headers=self.headers, json=data
+        )
+        return response.text
+
+
+<<END TOOL: Serply APITool>>
+
+
+<<START TOOL: SpiderTool>>
+# SpiderTool
+
+
+## Description
+
+
+[Spider](https://spider.cloud/?ref=crewai) is the [fastest](https://github.com/spider-rs/spider/blob/main/benches/BENCHMARKS.md#benchmark-results) open source scraper and crawler that returns LLM-ready data. It converts any website into pure HTML, markdown, metadata or text while enabling you to crawl with custom actions using AI.
+
+
+## Installation
+
+
+To use the Spider API you need to download the [Spider SDK](https://pypi.org/project/spider-client/) and the crewai[tools] SDK too:
+
+
+```python
+pip install spider-client 'crewai[tools]'
+```
+
+
+## Example
+
+
+This example shows you how you can use the Spider tool to enable your agent to scrape and crawl websites. The data returned from the Spider API is already LLM-ready, so no need to do any cleaning there.
+
+
+```python
+from crewai_tools import SpiderTool
+
+
+def main():
+    spider_tool = SpiderTool()
+    
+    searcher = Agent(
+        role="Web Research Expert",
+        goal="Find related information from specific URL's",
+        backstory="An expert web researcher that uses the web extremely well",
+        tools=[spider_tool],
+        verbose=True,
+    )
+
+
+    return_metadata = Task(
+        description="Scrape https://spider.cloud with a limit of 1 and enable metadata",
+        expected_output="Metadata and 10 word summary of spider.cloud",
+        agent=searcher
+    )
+
+
+    crew = Crew(
+        agents=[searcher],
+        tasks=[
+            return_metadata, 
+        ],
+        verbose=2
+    )
+    
+    crew.kickoff()
+
+
+if __name__ == "__main__":
+    main()
+```
+
+
+## Arguments
+
+
+- `api_key` (string, optional): Specifies Spider API key. If not specified, it looks for `SPIDER_API_KEY` in environment variables.
+- `params` (object, optional): Optional parameters for the request. Defaults to `{"return_format": "markdown"}` to return the website's content in a format that fits LLMs better.
+    - `request` (string): The request type to perform. Possible values are `http`, `chrome`, and `smart`. Use `smart` to perform an HTTP request by default until JavaScript rendering is needed for the HTML.
+    - `limit` (int): The maximum number of pages allowed to crawl per website. Remove the value or set it to `0` to crawl all pages.
+    - `depth` (int): The crawl limit for maximum depth. If `0`, no limit will be applied.
+    - `cache` (bool): Use HTTP caching for the crawl to speed up repeated runs. Default is `true`.
+    - `budget` (object): Object that has paths with a counter for limiting the amount of pages example `{"*":1}` for only crawling the root page.
+    - `locale` (string): The locale to use for request, example `en-US`.
+    - `cookies` (string): Add HTTP cookies to use for request.
+    - `stealth` (bool): Use stealth mode for headless chrome request to help prevent being blocked. The default is `true` on chrome.
+    - `headers` (object): Forward HTTP headers to use for all request. The object is expected to be a map of key value pairs.
+    - `metadata` (bool): Boolean to store metadata about the pages and content found. This could help improve AI interopt. Defaults to `false` unless you have the website already stored with the configuration enabled.
+    - `viewport` (object): Configure the viewport for chrome. Defaults to `800x600`.
+    - `encoding` (string): The type of encoding to use like `UTF-8`, `SHIFT_JIS`, or etc.
+    - `subdomains` (bool): Allow subdomains to be included. Default is `false`.
+    - `user_agent` (string): Add a custom HTTP user agent to the request. By default this is set to a random agent.
+    - `store_data` (bool): Boolean to determine if storage should be used. If set this takes precedence over `storageless`. Defaults to `false`.
+    - `gpt_config` (object): Use AI to generate actions to perform during the crawl. You can pass an array for the `"prompt"` to chain steps.
+    - `fingerprint` (bool): Use advanced fingerprint for chrome.
+    - `storageless` (bool): Boolean to prevent storing any type of data for the request including storage and AI vectors embedding. Defaults to `false` unless you have the website already stored.
+    - `readability` (bool): Use [readability](https://github.com/mozilla/readability) to pre-process the content for reading. This may drastically improve the content for LLM usage.
+    `return_format` (string): The format to return the data in. Possible values are `markdown`, `raw`, `text`, and `html2text`. Use `raw` to return the default format of the page like HTML etc.
+    - `proxy_enabled` (bool): Enable high performance premium proxies for the request to prevent being blocked at the network level.
+    - `query_selector` (string): The CSS query selector to use when extracting content from the markup.
+    - `full_resources` (bool): Crawl and download all the resources for a website.
+    - `request_timeout` (int): The timeout to use for request. Timeouts can be from `5-60`. The default is `30` seconds.
+    - `run_in_background` (bool): Run the request in the background. Useful if storing data and wanting to trigger crawls to the dashboard. This has no effect if storageless is set.
+
+
+from typing import Any, Dict, Literal, Optional, Type
+
+
+from pydantic import BaseModel, Field
+
+
+from crewai_tools.tools.base_tool import BaseTool
+
+
+
+
+class SpiderToolSchema(BaseModel):
+    url: str = Field(description="Website URL")
+    params: Optional[Dict[str, Any]] = Field(
+        description="Set additional params. Options include:\n"
+        "- `limit`: Optional[int] - The maximum number of pages allowed to crawl per website. Remove the value or set it to `0` to crawl all pages.\n"
+        "- `depth`: Optional[int] - The crawl limit for maximum depth. If `0`, no limit will be applied.\n"
+        "- `metadata`: Optional[bool] - Boolean to include metadata or not. Defaults to `False` unless set to `True`. If the user wants metadata, include params.metadata = True.\n"
+        "- `query_selector`: Optional[str] - The CSS query selector to use when extracting content from the markup.\n"
+    )
+    mode: Literal["scrape", "crawl"] = Field(
+        default="scrape",
+        description="Mode, the only two allowed modes are `scrape` or `crawl`. Use `scrape` to scrape a single page and `crawl` to crawl the entire website following subpages. These modes are the only allowed values even when ANY params is set.",
+    )
+
+
+
+
+class SpiderTool(BaseTool):
+    name: str = "Spider scrape & crawl tool"
+    description: str = "Scrape & Crawl any url and return LLM-ready data."
+    args_schema: Type[BaseModel] = SpiderToolSchema
+    api_key: Optional[str] = None
+    spider: Optional[Any] = None
+
+
+    def __init__(self, api_key: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        try:
+            from spider import Spider  # type: ignore
+        except ImportError:
+            raise ImportError(
+                "`spider-client` package not found, please run `pip install spider-client`"
+            )
+
+
+        self.spider = Spider(api_key=api_key)
+
+
+    def _run(
+        self,
+        url: str,
+        params: Optional[Dict[str, Any]] = None,
+        mode: Optional[Literal["scrape", "crawl"]] = "scrape",
+    ):
+        if mode not in ["scrape", "crawl"]:
+            raise ValueError(
+                "Unknown mode in `mode` parameter, `scrape` or `crawl` are the allowed modes"
+            )
+
+
+        # Ensure 'return_format': 'markdown' is always included
+        if params:
+            params["return_format"] = "markdown"
+        else:
+            params = {"return_format": "markdown"}
+
+
+        action = self.spider.scrape_url if mode == "scrape" else self.spider.crawl_url
+        spider_docs = action(url=url, params=params)
+
+
+        return spider_docs
+
+
+<<END TOOL: SpiderTool>>
+
+
+<<START TOOL: TXTSearchTool>>
+# TXTSearchTool
+
+
+## Description
+This tool is used to perform a RAG (Retrieval-Augmented Generation) search within the content of a text file. It allows for semantic searching of a query within a specified text file's content, making it an invaluable resource for quickly extracting information or finding specific sections of text based on the query provided.
+
+
+## Installation
+To use the TXTSearchTool, you first need to install the crewai_tools package. This can be done using pip, a package manager for Python. Open your terminal or command prompt and enter the following command:
+
+
+```shell
+pip install 'crewai[tools]'
+```
+
+
+This command will download and install the TXTSearchTool along with any necessary dependencies.
+
+
+## Example
+The following example demonstrates how to use the TXTSearchTool to search within a text file. This example shows both the initialization of the tool with a specific text file and the subsequent search within that file's content.
+
+
+```python
+from crewai_tools import TXTSearchTool
+
+
+# Initialize the tool to search within any text file's content the agent learns about during its execution
+tool = TXTSearchTool()
+
+
+# OR
+
+
+# Initialize the tool with a specific text file, so the agent can search within the given text file's content
+tool = TXTSearchTool(txt='path/to/text/file.txt')
+```
+
+
+## Arguments
+- `txt` (str): **Optinal**. The path to the text file you want to search. This argument is only required if the tool was not initialized with a specific text file; otherwise, the search will be conducted within the initially provided text file.
+
+
+## Custom model and embeddings
+
+
+By default, the tool uses OpenAI for both embeddings and summarization. To customize the model, you can use a config dictionary as follows:
+
+
+```python
+tool = TXTSearchTool(
+    config=dict(
+        llm=dict(
+            provider="ollama", # or google, openai, anthropic, llama2, ...
+            config=dict(
+                model="llama2",
+                # temperature=0.5,
+                # top_p=1,
+                # stream=true,
+            ),
+        ),
+        embedder=dict(
+            provider="google",
+            config=dict(
+                model="models/embedding-001",
+                task_type="retrieval_document",
+                # title="Embeddings",
+            ),
+        ),
+    )
+)
+```
+from typing import Any, Optional, Type
+
+
+from embedchain.models.data_type import DataType
+from pydantic import BaseModel, Field
+
+
+from ..rag.rag_tool import RagTool
+
+
+
+
+class FixedTXTSearchToolSchema(BaseModel):
+    """Input for TXTSearchTool."""
+
+
+    search_query: str = Field(
+        ...,
+        description="Mandatory search query you want to use to search the txt's content",
+    )
+
+
+
+
+class TXTSearchToolSchema(FixedTXTSearchToolSchema):
+    """Input for TXTSearchTool."""
+
+
+    txt: str = Field(..., description="Mandatory txt path you want to search")
+
+
+
+
+class TXTSearchTool(RagTool):
+    name: str = "Search a txt's content"
+    description: str = (
+        "A tool that can be used to semantic search a query from a txt's content."
+    )
+    args_schema: Type[BaseModel] = TXTSearchToolSchema
+
+
+    def __init__(self, txt: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        if txt is not None:
+            self.add(txt)
+            self.description = f"A tool that can be used to semantic search a query the {txt} txt's content."
+            self.args_schema = FixedTXTSearchToolSchema
+            self._generate_description()
+
+
+    def add(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        kwargs["data_type"] = DataType.TEXT_FILE
+        super().add(*args, **kwargs)
+
+
+    def _before_run(
+        self,
+        query: str,
+        **kwargs: Any,
+    ) -> Any:
+        if "txt" in kwargs:
+            self.add(kwargs["txt"])
+
+
+    def _run(
+        self,
+        search_query: str,
+        **kwargs: Any,
+    ) -> Any:
+        return super()._run(query=search_query, **kwargs)
+
+
+<<END TOOL: TXTSearchTool>>
+
+
+<<START TOOL: VisionTool>>
+# Vision Tool
+
+
+## Description
+
+
+This tool is used to extract text from images. When passed to the agent it will extract the text from the image and then use it to generate a response, report or any other output. The URL or the PATH of the image should be passed to the Agent.
+
+
+
+
+## Installation
+Install the crewai_tools package
+```shell
+pip install 'crewai[tools]'
+```
+
+
+## Usage
+
+
+In order to use the VisionTool, the OpenAI API key should be set in the environment variable `OPENAI_API_KEY`.
+
+
+```python
+from crewai_tools import VisionTool
+
+
+vision_tool = VisionTool()
+
+
+@agent
+def researcher(self) -> Agent:
+    return Agent(
+        config=self.agents_config["researcher"],
+        allow_delegation=False,
+        tools=[vision_tool]
+    )
+```
+import base64
+from typing import Type
+
+
+import requests
+from openai import OpenAI
+from pydantic import BaseModel
+
+
+from crewai_tools.tools.base_tool import BaseTool
+
+
+
+
+class ImagePromptSchema(BaseModel):
+    """Input for Vision Tool."""
+
+
+    image_path_url: str = "The image path or URL."
+
+
+
+
+class VisionTool(BaseTool):
+    name: str = "Vision Tool"
+    description: str = (
+        "This tool uses OpenAI's Vision API to describe the contents of an image."
+    )
+    args_schema: Type[BaseModel] = ImagePromptSchema
+
+
+    def _run_web_hosted_images(self, client, image_path_url: str) -> str:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "What's in this image?"},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": image_path_url},
+                        },
+                    ],
+                }
+            ],
+            max_tokens=300,
+        )
+
+
+        return response.choices[0].message.content
+
+
+    def _run_local_images(self, client, image_path_url: str) -> str:
+        base64_image = self._encode_image(image_path_url)
+
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {client.api_key}",
+        }
+
+
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "What's in this image?"},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_image}"
+                            },
+                        },
+                    ],
+                }
+            ],
+            "max_tokens": 300,
+        }
+
+
+        response = requests.post(
+            "https://api.openai.com/v1/chat/completions", headers=headers, json=payload
+        )
+
+
+        return response.json()["choices"][0]["message"]["content"]
+
+
+    def _run(self, **kwargs) -> str:
+        client = OpenAI()
+
+
+        image_path_url = kwargs.get("image_path_url")
+
+
+        if not image_path_url:
+            return "Image Path or URL is required."
+
+
+        if "http" in image_path_url:
+            image_description = self._run_web_hosted_images(client, image_path_url)
+        else:
+            image_description = self._run_local_images(client, image_path_url)
+
+
+        return image_description
+
+
+    def _encode_image(self, image_path: str):
+        with open(image_path, "rb") as image_file:
+            return base64.b64encode(image_file.read()).decode("utf-8")
+
+
+<<END TOOL: VisionTool>>
+
+
+<<START TOOL: WebsiteSearchTool>>
+# WebsiteSearchTool
+
+
+## Description
+This tool is specifically crafted for conducting semantic searches within the content of a particular website. Leveraging a Retrieval-Augmented Generation (RAG) model, it navigates through the information provided on a given URL. Users have the flexibility to either initiate a search across any website known or discovered during its usage or to concentrate the search on a predefined, specific website.
+
+
+## Installation
+Install the crewai_tools package by executing the following command in your terminal:
+
+
+```shell
+pip install 'crewai[tools]'
+```
+
+
+## Example
+To utilize the WebsiteSearchTool for different use cases, follow these examples:
+
+
+```python
+from crewai_tools import WebsiteSearchTool
+
+
+# To enable the tool to search any website the agent comes across or learns about during its operation
+tool = WebsiteSearchTool()
+
+
+# OR
+
+
+# To restrict the tool to only search within the content of a specific website.
+tool = WebsiteSearchTool(website='https://example.com')
+```
+
+
+## Arguments
+- `website` : An optional argument that specifies the valid website URL to perform the search on. This becomes necessary if the tool is initialized without a specific website. In the `WebsiteSearchToolSchema`, this argument is mandatory. However, in the `FixedWebsiteSearchToolSchema`, it becomes optional if a website is provided during the tool's initialization, as it will then only search within the predefined website's content.
+
+
+## Custom model and embeddings
+
+
+By default, the tool uses OpenAI for both embeddings and summarization. To customize the model, you can use a config dictionary as follows:
+
+
+```python
+tool = WebsiteSearchTool(
+    config=dict(
+        llm=dict(
+            provider="ollama", # or google, openai, anthropic, llama2, ...
+            config=dict(
+                model="llama2",
+                # temperature=0.5,
+                # top_p=1,
+                # stream=true,
+            ),
+        ),
+        embedder=dict(
+            provider="google",
+            config=dict(
+                model="models/embedding-001",
+                task_type="retrieval_document",
+                # title="Embeddings",
+            ),
+        ),
+    )
+)
+```
+from typing import Any, Optional, Type
+
+
+from embedchain.models.data_type import DataType
+from pydantic import BaseModel, Field
+
+
+from ..rag.rag_tool import RagTool
+
+
+
+
+class FixedWebsiteSearchToolSchema(BaseModel):
+    """Input for WebsiteSearchTool."""
+
+
+    search_query: str = Field(
+        ...,
+        description="Mandatory search query you want to use to search a specific website",
+    )
+
+
+
+
+class WebsiteSearchToolSchema(FixedWebsiteSearchToolSchema):
+    """Input for WebsiteSearchTool."""
+
+
+    website: str = Field(
+        ..., description="Mandatory valid website URL you want to search on"
+    )
+
+
+
+
+class WebsiteSearchTool(RagTool):
+    name: str = "Search in a specific website"
+    description: str = (
+        "A tool that can be used to semantic search a query from a specific URL content."
+    )
+    args_schema: Type[BaseModel] = WebsiteSearchToolSchema
+
+
+    def __init__(self, website: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        if website is not None:
+            self.add(website)
+            self.description = f"A tool that can be used to semantic search a query from {website} website content."
+            self.args_schema = FixedWebsiteSearchToolSchema
+            self._generate_description()
+
+
+    def add(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        kwargs["data_type"] = DataType.WEB_PAGE
+        super().add(*args, **kwargs)
+
+
+    def _before_run(
+        self,
+        query: str,
+        **kwargs: Any,
+    ) -> Any:
+        if "website" in kwargs:
+            self.add(kwargs["website"])
+
+
+    def _run(
+        self,
+        search_query: str,
+        **kwargs: Any,
+    ) -> Any:
+        return super()._run(query=search_query, **kwargs)
+
+
+<<END TOOL: WebsiteSearchTool>>
+
+
+
+
+<<START TOOL: XMLSearchTool>>
+# XMLSearchTool
+
+
+## Description
+The XMLSearchTool is a cutting-edge RAG tool engineered for conducting semantic searches within XML files. Ideal for users needing to parse and extract information from XML content efficiently, this tool supports inputting a search query and an optional XML file path. By specifying an XML path, users can target their search more precisely to the content of that file, thereby obtaining more relevant search outcomes.
+
+
+## Installation
+To start using the XMLSearchTool, you must first install the crewai_tools package. This can be easily done with the following command:
+
+
+```shell
+pip install 'crewai[tools]'
+```
+
+
+## Example
+Here are two examples demonstrating how to use the XMLSearchTool. The first example shows searching within a specific XML file, while the second example illustrates initiating a search without predefining an XML path, providing flexibility in search scope.
+
+
+```python
+from crewai_tools.tools.xml_search_tool import XMLSearchTool
+
+
+# Allow agents to search within any XML file's content as it learns about their paths during execution
+tool = XMLSearchTool()
+
+
+# OR
+
+
+# Initialize the tool with a specific XML file path for exclusive search within that document
+tool = XMLSearchTool(xml='path/to/your/xmlfile.xml')
+```
+
+
+## Arguments
+- `xml`: This is the path to the XML file you wish to search. It is an optional parameter during the tool's initialization but must be provided either at initialization or as part of the `run` method's arguments to execute a search.
+
+
+## Custom model and embeddings
+
+
+By default, the tool uses OpenAI for both embeddings and summarization. To customize the model, you can use a config dictionary as follows:
+
+
+```python
+tool = XMLSearchTool(
+    config=dict(
+        llm=dict(
+            provider="ollama", # or google, openai, anthropic, llama2, ...
+            config=dict(
+                model="llama2",
+                # temperature=0.5,
+                # top_p=1,
+                # stream=true,
+            ),
+        ),
+        embedder=dict(
+            provider="google",
+            config=dict(
+                model="models/embedding-001",
+                task_type="retrieval_document",
+                # title="Embeddings",
+            ),
+        ),
+    )
+)
+```
+from typing import Any, Optional, Type
+
+
+from embedchain.models.data_type import DataType
+from pydantic import BaseModel, Field
+
+
+from ..rag.rag_tool import RagTool
+
+
+
+
+class FixedXMLSearchToolSchema(BaseModel):
+    """Input for XMLSearchTool."""
+
+
+    search_query: str = Field(
+        ...,
+        description="Mandatory search query you want to use to search the XML's content",
+    )
+
+
+
+
+class XMLSearchToolSchema(FixedXMLSearchToolSchema):
+    """Input for XMLSearchTool."""
+
+
+    xml: str = Field(..., description="Mandatory xml path you want to search")
+
+
+
+
+class XMLSearchTool(RagTool):
+    name: str = "Search a XML's content"
+    description: str = (
+        "A tool that can be used to semantic search a query from a XML's content."
+    )
+    args_schema: Type[BaseModel] = XMLSearchToolSchema
+
+
+    def __init__(self, xml: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        if xml is not None:
+            self.add(xml)
+            self.description = f"A tool that can be used to semantic search a query the {xml} XML's content."
+            self.args_schema = FixedXMLSearchToolSchema
+            self._generate_description()
+
+
+    def add(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        kwargs["data_type"] = DataType.XML
+        super().add(*args, **kwargs)
+
+
+    def _before_run(
+        self,
+        query: str,
+        **kwargs: Any,
+    ) -> Any:
+        if "xml" in kwargs:
+            self.add(kwargs["xml"])
+
+
+    def _run(
+        self,
+        search_query: str,
+        **kwargs: Any,
+    ) -> Any:
+        return super()._run(query=search_query, **kwargs)
+
+
+<<END TOOL: XMLSearchTool>>
+
+
+<<START TOOL: YoutubeChannelSearchTool>>
+# YoutubeChannelSearchTool
+
+
+## Description
+This tool is designed to perform semantic searches within a specific Youtube channel's content. Leveraging the RAG (Retrieval-Augmented Generation) methodology, it provides relevant search results, making it invaluable for extracting information or finding specific content without the need to manually sift through videos. It streamlines the search process within Youtube channels, catering to researchers, content creators, and viewers seeking specific information or topics.
+
+
+## Installation
+To utilize the YoutubeChannelSearchTool, the `crewai_tools` package must be installed. Execute the following command in your shell to install:
+
+
+```shell
+pip install 'crewai[tools]'
+```
+
+
+## Example
+To begin using the YoutubeChannelSearchTool, follow the example below. This demonstrates initializing the tool with a specific Youtube channel handle and conducting a search within that channel's content.
+
+
+```python
+from crewai_tools import YoutubeChannelSearchTool
+
+
+# Initialize the tool to search within any Youtube channel's content the agent learns about during its execution
+tool = YoutubeChannelSearchTool()
+
+
+# OR
+
+
+# Initialize the tool with a specific Youtube channel handle to target your search
+tool = YoutubeChannelSearchTool(youtube_channel_handle='@exampleChannel')
+```
+
+
+## Arguments
+- `youtube_channel_handle` : A mandatory string representing the Youtube channel handle. This parameter is crucial for initializing the tool to specify the channel you want to search within. The tool is designed to only search within the content of the provided channel handle.
+
+
+## Custom model and embeddings
+
+
+By default, the tool uses OpenAI for both embeddings and summarization. To customize the model, you can use a config dictionary as follows:
+
+
+```python
+tool = YoutubeChannelSearchTool(
+    config=dict(
+        llm=dict(
+            provider="ollama", # or google, openai, anthropic, llama2, ...
+            config=dict(
+                model="llama2",
+                # temperature=0.5,
+                # top_p=1,
+                # stream=true,
+            ),
+        ),
+        embedder=dict(
+            provider="google",
+            config=dict(
+                model="models/embedding-001",
+                task_type="retrieval_document",
+                # title="Embeddings",
+            ),
+        ),
+    )
+)
+```
+from typing import Any, Optional, Type
+
+
+from embedchain.models.data_type import DataType
+from pydantic import BaseModel, Field
+
+
+from ..rag.rag_tool import RagTool
+
+
+
+
+class FixedYoutubeChannelSearchToolSchema(BaseModel):
+    """Input for YoutubeChannelSearchTool."""
+
+
+    search_query: str = Field(
+        ...,
+        description="Mandatory search query you want to use to search the Youtube Channels content",
+    )
+
+
+
+
+class YoutubeChannelSearchToolSchema(FixedYoutubeChannelSearchToolSchema):
+    """Input for YoutubeChannelSearchTool."""
+
+
+    youtube_channel_handle: str = Field(
+        ..., description="Mandatory youtube_channel_handle path you want to search"
+    )
+
+
+
+
+class YoutubeChannelSearchTool(RagTool):
+    name: str = "Search a Youtube Channels content"
+    description: str = (
+        "A tool that can be used to semantic search a query from a Youtube Channels content."
+    )
+    args_schema: Type[BaseModel] = YoutubeChannelSearchToolSchema
+
+
+    def __init__(self, youtube_channel_handle: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        if youtube_channel_handle is not None:
+            self.add(youtube_channel_handle)
+            self.description = f"A tool that can be used to semantic search a query the {youtube_channel_handle} Youtube Channels content."
+            self.args_schema = FixedYoutubeChannelSearchToolSchema
+            self._generate_description()
+
+
+    def add(
+        self,
+        youtube_channel_handle: str,
+        **kwargs: Any,
+    ) -> None:
+        if not youtube_channel_handle.startswith("@"):
+            youtube_channel_handle = f"@{youtube_channel_handle}"
+
+
+        kwargs["data_type"] = DataType.YOUTUBE_CHANNEL
+        super().add(youtube_channel_handle, **kwargs)
+
+
+    def _before_run(
+        self,
+        query: str,
+        **kwargs: Any,
+    ) -> Any:
+        if "youtube_channel_handle" in kwargs:
+            self.add(kwargs["youtube_channel_handle"])
+
+
+    def _run(
+        self,
+        search_query: str,
+        **kwargs: Any,
+    ) -> Any:
+        return super()._run(query=search_query, **kwargs)
+
+
+<<END TOOL: YoutubeChannelSearchTool>>
+
+
+<<START TOOL: YoutubeVideoSearchTool>>
+# YoutubeVideoSearchTool
+
+
+## Description
+
+
+This tool is part of the `crewai_tools` package and is designed to perform semantic searches within Youtube video content, utilizing Retrieval-Augmented Generation (RAG) techniques. It is one of several "Search" tools in the package that leverage RAG for different sources. The YoutubeVideoSearchTool allows for flexibility in searches; users can search across any Youtube video content without specifying a video URL, or they can target their search to a specific Youtube video by providing its URL.
+
+
+## Installation
+
+
+To utilize the YoutubeVideoSearchTool, you must first install the `crewai_tools` package. This package contains the YoutubeVideoSearchTool among other utilities designed to enhance your data analysis and processing tasks. Install the package by executing the following command in your terminal:
+
+
+```
+pip install 'crewai[tools]'
+```
+
+
+## Example
+
+
+To integrate the YoutubeVideoSearchTool into your Python projects, follow the example below. This demonstrates how to use the tool both for general Youtube content searches and for targeted searches within a specific video's content.
+
+
+```python
+from crewai_tools import YoutubeVideoSearchTool
+
+
+# General search across Youtube content without specifying a video URL, so the agent can search within any Youtube video content it learns about irs url during its operation
+tool = YoutubeVideoSearchTool()
+
+
+# Targeted search within a specific Youtube video's content
+tool = YoutubeVideoSearchTool(youtube_video_url='https://youtube.com/watch?v=example')
+```
+## Arguments
+
+
+The YoutubeVideoSearchTool accepts the following initialization arguments:
+
+
+- `youtube_video_url`: An optional argument at initialization but required if targeting a specific Youtube video. It specifies the Youtube video URL path you want to search within.
+
+
+## Custom model and embeddings
+
+
+By default, the tool uses OpenAI for both embeddings and summarization. To customize the model, you can use a config dictionary as follows:
+
+
+```python
+tool = YoutubeVideoSearchTool(
+    config=dict(
+        llm=dict(
+            provider="ollama", # or google, openai, anthropic, llama2, ...
+            config=dict(
+                model="llama2",
+                # temperature=0.5,
+                # top_p=1,
+                # stream=true,
+            ),
+        ),
+        embedder=dict(
+            provider="google",
+            config=dict(
+                model="models/embedding-001",
+                task_type="retrieval_document",
+                # title="Embeddings",
+            ),
+        ),
+    )
+)
+```
+from typing import Any, Optional, Type
+
+
+from embedchain.models.data_type import DataType
+from pydantic import BaseModel, Field
+
+
+from ..rag.rag_tool import RagTool
+
+
+
+
+class FixedYoutubeVideoSearchToolSchema(BaseModel):
+    """Input for YoutubeVideoSearchTool."""
+
+
+    search_query: str = Field(
+        ...,
+        description="Mandatory search query you want to use to search the Youtube Video content",
+    )
+
+
+
+
+class YoutubeVideoSearchToolSchema(FixedYoutubeVideoSearchToolSchema):
+    """Input for YoutubeVideoSearchTool."""
+
+
+    youtube_video_url: str = Field(
+        ..., description="Mandatory youtube_video_url path you want to search"
+    )
+
+
+
+
+class YoutubeVideoSearchTool(RagTool):
+    name: str = "Search a Youtube Video content"
+    description: str = (
+        "A tool that can be used to semantic search a query from a Youtube Video content."
+    )
+    args_schema: Type[BaseModel] = YoutubeVideoSearchToolSchema
+
+
+    def __init__(self, youtube_video_url: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        if youtube_video_url is not None:
+            self.add(youtube_video_url)
+            self.description = f"A tool that can be used to semantic search a query the {youtube_video_url} Youtube Video content."
+            self.args_schema = FixedYoutubeVideoSearchToolSchema
+            self._generate_description()
+
+
+    def add(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        kwargs["data_type"] = DataType.YOUTUBE_VIDEO
+        super().add(*args, **kwargs)
+
+
+    def _before_run(
+        self,
+        query: str,
+        **kwargs: Any,
+    ) -> Any:
+        if "youtube_video_url" in kwargs:
+            self.add(kwargs["youtube_video_url"])
+
+
+    def _run(
+        self,
+        search_query: str,
+        **kwargs: Any,
+    ) -> Any:
+        return super()._run(query=search_query, **kwargs)
+
+
+<<END TOOL: YoutubeVideoSearchTool>>
+
+
+Some INIT
+from .browserbase_load_tool.browserbase_load_tool import BrowserbaseLoadTool
+from .code_docs_search_tool.code_docs_search_tool import CodeDocsSearchTool
+from .code_interpreter_tool.code_interpreter_tool import CodeInterpreterTool
+from .composio_tool.composio_tool import ComposioTool
+from .csv_search_tool.csv_search_tool import CSVSearchTool
+from .dalle_tool.dalle_tool import DallETool
+from .directory_read_tool.directory_read_tool import DirectoryReadTool
+from .directory_search_tool.directory_search_tool import DirectorySearchTool
+from .docx_search_tool.docx_search_tool import DOCXSearchTool
+from .exa_tools.exa_search_tool import EXASearchTool
+from .file_read_tool.file_read_tool import FileReadTool
+from .file_writer_tool.file_writer_tool import FileWriterTool
+from .firecrawl_crawl_website_tool.firecrawl_crawl_website_tool import (
+    FirecrawlCrawlWebsiteTool
+)
+from .firecrawl_scrape_website_tool.firecrawl_scrape_website_tool import (
+    FirecrawlScrapeWebsiteTool
+)
+from .firecrawl_search_tool.firecrawl_search_tool import FirecrawlSearchTool
+from .github_search_tool.github_search_tool import GithubSearchTool
+from .json_search_tool.json_search_tool import JSONSearchTool
+from .llamaindex_tool.llamaindex_tool import LlamaIndexTool
+from .mdx_seach_tool.mdx_search_tool import MDXSearchTool
+from .multion_tool.multion_tool import MultiOnTool
+from .nl2sql.nl2sql_tool import NL2SQLTool
+from .pdf_search_tool.pdf_search_tool import PDFSearchTool
+from .pg_seach_tool.pg_search_tool import PGSearchTool
+from .rag.rag_tool import RagTool
+from .scrape_element_from_website.scrape_element_from_website import (
+    ScrapeElementFromWebsiteTool
+)
+from .scrape_website_tool.scrape_website_tool import ScrapeWebsiteTool
+from .scrapfly_scrape_website_tool.scrapfly_scrape_website_tool import (
+    ScrapflyScrapeWebsiteTool
+)
+from .selenium_scraping_tool.selenium_scraping_tool import SeleniumScrapingTool
+from .serper_dev_tool.serper_dev_tool import SerperDevTool
+from .serply_api_tool.serply_job_search_tool import SerplyJobSearchTool
+from .serply_api_tool.serply_news_search_tool import SerplyNewsSearchTool
+from .serply_api_tool.serply_scholar_search_tool import SerplyScholarSearchTool
+from .serply_api_tool.serply_web_search_tool import SerplyWebSearchTool
+from .serply_api_tool.serply_webpage_to_markdown_tool import SerplyWebpageToMarkdownTool
+from .spider_tool.spider_tool import SpiderTool
+from .txt_search_tool.txt_search_tool import TXTSearchTool
+from .vision_tool.vision_tool import VisionTool
+from .website_search.website_search_tool import WebsiteSearchTool
+from .xml_search_tool.xml_search_tool import XMLSearchTool
+from .youtube_channel_search_tool.youtube_channel_search_tool import (
+    YoutubeChannelSearchTool
+)
+from .youtube_video_search_tool.youtube_video_search_tool import YoutubeVideoSearchTool
+from .mysql_search_tool.mysql_search_tool import MySQLSearchTool
+from .tools import (
+    BrowserbaseLoadTool,
+    CodeDocsSearchTool,
+    CodeInterpreterTool,
+    ComposioTool,
+    CSVSearchTool,
+    DallETool,
+    DirectoryReadTool,
+    DirectorySearchTool,
+    DOCXSearchTool,
+    EXASearchTool,
+    FileReadTool,
+    FileWriterTool,
+    FirecrawlCrawlWebsiteTool,
+    FirecrawlScrapeWebsiteTool,
+    FirecrawlSearchTool,
+    GithubSearchTool,
+    JSONSearchTool,
+    LlamaIndexTool,
+    MDXSearchTool,
+    MultiOnTool,
+    NL2SQLTool,
+    PDFSearchTool,
+    PGSearchTool,
+    RagTool,
+    ScrapeElementFromWebsiteTool,
+    ScrapeWebsiteTool,
+    ScrapflyScrapeWebsiteTool,
+    SeleniumScrapingTool,
+    SerperDevTool,
+    SerplyJobSearchTool,
+    SerplyNewsSearchTool,
+    SerplyScholarSearchTool,
+    SerplyWebpageToMarkdownTool,
+    SerplyWebSearchTool,
+    TXTSearchTool,
+    VisionTool,
+    WebsiteSearchTool,
+    XMLSearchTool,
+    YoutubeChannelSearchTool,
+    YoutubeVideoSearchTool,
+    MySQLSearchTool
+)
+from .tools.base_tool import BaseTool, Tool, tool
+
+
+base_tools.py
+from abc import ABC, abstractmethod
+from typing import Any, Callable, Optional, Type
+
+
+from langchain_core.tools import StructuredTool
+from pydantic import BaseModel, ConfigDict, Field, validator
+from pydantic import BaseModel as PydanticBaseModel
+
+
+
+
+class BaseTool(BaseModel, ABC):
+    class _ArgsSchemaPlaceholder(PydanticBaseModel):
+        pass
+
+
+    model_config = ConfigDict()
+
+
+    name: str
+    """The unique name of the tool that clearly communicates its purpose."""
+    description: str
+    """Used to tell the model how/when/why to use the tool."""
+    args_schema: Type[PydanticBaseModel] = Field(default_factory=_ArgsSchemaPlaceholder)
+    """The schema for the arguments that the tool accepts."""
+    description_updated: bool = False
+    """Flag to check if the description has been updated."""
+    cache_function: Optional[Callable] = lambda _args, _result: True
+    """Function that will be used to determine if the tool should be cached, should return a boolean. If None, the tool will be cached."""
+    result_as_answer: bool = False
+    """Flag to check if the tool should be the final agent answer."""
+
+
+    @validator("args_schema", always=True, pre=True)
+    def _default_args_schema(
+        cls, v: Type[PydanticBaseModel]
+    ) -> Type[PydanticBaseModel]:
+        if not isinstance(v, cls._ArgsSchemaPlaceholder):
+            return v
+
+
+        return type(
+            f"{cls.__name__}Schema",
+            (PydanticBaseModel,),
+            {
+                "__annotations__": {
+                    k: v for k, v in cls._run.__annotations__.items() if k != "return"
+                },
+            },
+        )
+
+
+    def model_post_init(self, __context: Any) -> None:
+        self._generate_description()
+
+
+        super().model_post_init(__context)
+
+
+    def run(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        print(f"Using Tool: {self.name}")
+        return self._run(*args, **kwargs)
+
+
+    @abstractmethod
+    def _run(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        """Here goes the actual implementation of the tool."""
+
+
+    def to_langchain(self) -> StructuredTool:
+        self._set_args_schema()
+        return StructuredTool(
+            name=self.name,
+            description=self.description,
+            args_schema=self.args_schema,
+            func=self._run,
+        )
+
+
+    def _set_args_schema(self):
+        if self.args_schema is None:
+            class_name = f"{self.__class__.__name__}Schema"
+            self.args_schema = type(
+                class_name,
+                (PydanticBaseModel,),
+                {
+                    "__annotations__": {
+                        k: v
+                        for k, v in self._run.__annotations__.items()
+                        if k != "return"
+                    },
+                },
+            )
+
+
+    def _generate_description(self):
+        args = []
+        args_description = []
+        for arg, attribute in self.args_schema.schema()["properties"].items():
+            if "type" in attribute:
+                args.append(f"{arg}: '{attribute['type']}'")
+            if "description" in attribute:
+                args_description.append(f"{arg}: '{attribute['description']}'")
+
+
+        description = self.description.replace("\n", " ")
+        self.description = f"{self.name}({', '.join(args)}) - {description} {', '.join(args_description)}"
+
+
+
+
+class Tool(BaseTool):
+    func: Callable
+    """The function that will be executed when the tool is called."""
+
+
+    def _run(self, *args: Any, **kwargs: Any) -> Any:
+        return self.func(*args, **kwargs)
+
+
+
+
+def to_langchain(
+    tools: list[BaseTool | StructuredTool],
+) -> list[StructuredTool]:
+    return [t.to_langchain() if isinstance(t, BaseTool) else t for t in tools]
+
+
+
+
+def tool(*args):
+    """
+    Decorator to create a tool from a function.
+    """
+
+
+    def _make_with_name(tool_name: str) -> Callable:
+        def _make_tool(f: Callable) -> BaseTool:
+            if f.__doc__ is None:
+                raise ValueError("Function must have a docstring")
+            if f.__annotations__ is None:
+                raise ValueError("Function must have type annotations")
+
+
+            class_name = "".join(tool_name.split()).title()
+            args_schema = type(
+                class_name,
+                (PydanticBaseModel,),
+                {
+                    "__annotations__": {
+                        k: v for k, v in f.__annotations__.items() if k != "return"
+                    },
+                },
+            )
+
+
+            return Tool(
+                name=tool_name,
+                description=f.__doc__,
+                func=f,
+                args_schema=args_schema,
+            )
+
+
+        return _make_tool
+
+
+    if len(args) == 1 and callable(args[0]):
+        return _make_with_name(args[0].__name__)(args[0])
+    if len(args) == 1 and isinstance(args[0], str):
+        return _make_with_name(args[0])
+    raise ValueError("Invalid arguments")
