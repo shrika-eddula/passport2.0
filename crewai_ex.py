@@ -2,7 +2,6 @@ from openai import OpenAI
 import openai 
 
 # Set your OpenAI API key
-openai.api_key = ""
 
 # Specify the path to your text file
 file_path = 'CrewAI Documentation.txt'
