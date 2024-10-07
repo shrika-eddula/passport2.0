@@ -1,15 +1,21 @@
+from dotenv import load_dotenv
 from openai import OpenAI
 import openai 
+import os
+
+load_dotenv()
+
+openai_api_key = os.getenv('OPENAI_API_KEY')
 
 
 # Specify the path to your text file
-file_path = 'CrewAI Documentation.txt'
+file_path = '../data/CrewAI Documentation.txt'
 
 # Open the file and read its contents
 with open(file_path, 'r') as file:
     pdf = file.read()
 
-with open("context.txt", 'r') as file:
+with open("example_context.txt", 'r') as file:
     context=file.read()
 # Now file_contents contains the entire content of the text file
 
@@ -17,7 +23,7 @@ def ask_openai_with_context(context, question):
     try:
         # Combine the context and question into a single prompt
         prompt = f"Context: {context}\n\nQuestion: {question}\n\nAnswer:"
-        client = OpenAI()
+        client = OpenAI(api_key=openai_api_key)
         # Make an API call to the OpenAI GPT model
         response = client.chat.completions.create(
             model="gpt-4o-mini",  # Use GPT-3 model (or "gpt-4" for GPT-4 model if available)
