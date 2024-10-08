@@ -1,4 +1,4 @@
-
+import argparse
 import requests 
 import uvicorn
 import json 
@@ -85,11 +85,12 @@ def runAgent(command="navigate to youtube.com."):
     print(f"Status Code: {response.status_code}")
     print(f"Response JSON: {response.json()}")
 
-if __name__ == "__main__":
+
+def main(prompt):
     # Start the API server
-    user_command = input("What do you want to do?")
+    user_command = prompt
     api_process = setupAPI()
-    
+
     try:
         # Run the agent
         runAgent(command=user_command)
@@ -98,3 +99,10 @@ if __name__ == "__main__":
         print("hi")
         print(api_process.pid)
         kill_child_processes(api_process.pid)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--prompt", type=str)
+    args = parser.parse_args()
+    main(args.prompt)
