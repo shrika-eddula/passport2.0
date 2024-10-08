@@ -1,6 +1,5 @@
-// import Image from "next/image";
-import { TaskManagerComponent } from "@/components/task-manager";
+import { OttoDashboardComponent } from "@/components/otto-dashboard";
 
 export default function Home() {
-  return <TaskManagerComponent />;
+  return <OttoDashboardComponent />;
 }
