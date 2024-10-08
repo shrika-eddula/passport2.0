@@ -6,9 +6,30 @@ import { useState } from "react";
 
 export function OttoDashboardComponent() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [inputText, setInputText] = useState("");
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
+  };
+
+  const handleInputChange = (event) => {
+    setInputText(event.target.value); // Update state with input value
+  };
+
+  const handleSubmit = async () => {
+    try {
+      const response = await fetch("http://127.0.0.1:5000/submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text: inputText }), // Send input text as JSON
+      });
+      const data = await response.json();
+      console.log("Response from server:", data);
+    } catch (error) {
+      console.error("Error:", error);
+    }
   };
 
   return (
@@ -32,15 +53,33 @@ export function OttoDashboardComponent() {
                 Start a new chat
               </button>
               <nav className="space-y-4">
-                <SidebarItem
-                  icon={WorkstreamsIcon}
-                  label="Workstreams"
-                  count={4}
-                />
-                <SidebarItem icon={KnowledgeIcon} label="Knowledge" count={2} />
-                <SidebarItem icon={PeopleIcon} label="People" />
-                <SidebarItem icon={ToolsIcon} label="Tools" />
-                <SidebarItem icon={LibraryIcon} label="Library" />
+                <Link href="/workstreams">
+                  <SidebarItem
+                    icon={WorkstreamsIcon}
+                    label="Workstreams"
+                    count={4}
+                  />
+                </Link>
+
+                <Link href="/workstreams">
+                  <SidebarItem
+                    icon={KnowledgeIcon}
+                    label="Knowledge"
+                    count={2}
+                  />
+                </Link>
+
+                <Link href="/workstreams">
+                  <SidebarItem icon={PeopleIcon} label="People" />
+                </Link>
+
+                <Link href="/workstreams">
+                  <SidebarItem icon={ToolsIcon} label="Tools" />
+                </Link>
+
+                <Link href="/workstreams">
+                  <SidebarItem icon={LibraryIcon} label="Library" />
+                </Link>
               </nav>
               <div className="mt-4 text-sm text-gray-600 space-y-2">
                 <p>Find flights to San Jose</p>
@@ -92,7 +131,14 @@ export function OttoDashboardComponent() {
         <div className="bg-white rounded-lg p-6 mb-8 shadow-sm">
           <div className="flex items-center text-gray-600">
             <PenSquare className="w-5 h-5 mr-2" />
-            <p className="text-lg">Ask Otto for anything!</p>
+            <input
+              type="text"
+              className="text-lg border-none outline-none"
+              placeholder="Ask Otto for anything!"
+              value={inputText} // Bind input value to state
+              onChange={handleInputChange} // Handle input change
+            />
+            <button onClick={handleSubmit}>Submit</button>
           </div>
         </div>
 
