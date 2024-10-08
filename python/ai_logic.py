@@ -10,7 +10,20 @@ class Boolean(BaseModel):
 
 
 class Steps(BaseModel):
-    steps: list[str]
+    class Agent(BaseModel):
+        name: str 
+        role:str 
+        goal: str 
+        backstory: str
+        allow_delegation:bool
+    
+    class Task(BaseModel):
+        description: str 
+        goal: str 
+        agent: str 
+
+    agents: list[Agent]
+    tasks: list[Task]
 
 def need_AgentE(prompt):
     completion = client.beta.chat.completions.parse(
@@ -31,12 +44,13 @@ def need_AgentE(prompt):
 
 
 def agentic_steps(prompt):
+    with open('agent_planning_prompt.txt', "r") as f:
+        agentic_prompt = f.read()
+    
     completion = client.beta.chat.completions.parse(
         model="gpt-4o-2024-08-06",
         messages=[
-            {"role": "system", "content": """You are an agent execution expert. You will be fed tasks. When you are given a task, break it into sub parts and make a detailed step by step list of tasks that need
-             to be done in order to complete the given task. For example, if I tell you that I want to generate test cases for my code, you might say that the first step is to understand the code, the next
-             step is to brainstorm various edge cases, and the step after is to build test cases for each case. Do this but even more detailed and break it into more steps."""},
+            {"role": "system", "content": agentic_prompt},
             {
                 "role": "user",
                 "content": prompt
@@ -60,7 +74,9 @@ def route_prompt(prompt, agent_starter_filepath = None):
         ]
         subprocess.run(command)
     else:
-        print(agentic_steps(prompt))
+        steps = agentic_steps(prompt)
+        for step in steps:
+            print(step)
 
 
 
