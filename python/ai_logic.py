@@ -2,7 +2,7 @@ import sys
 import subprocess
 from openai import OpenAI
 from pydantic import BaseModel
-from AgentE_Planner import main
+from AgentE.AgentE_Planner import main
 client = OpenAI()
 
 class Boolean(BaseModel):
@@ -47,9 +47,11 @@ def agentic_steps(prompt):
 
     return completion.choices[0].message.parsed 
 
-def route_prompt(prompt):
+def route_prompt(prompt, agent_starter_filepath = None):
+    if not agent_starter_filepath:
+        raise ValueError("Agent planner file is required!")
+    
     if "True" in str(need_AgentE(prompt)):
-        agent_starter_filepath = "/Users/advaygoel/Desktop/passport2.0/AgentE/AgentE_Planner.py"
         command = [
             sys.executable,
             agent_starter_filepath,
@@ -65,5 +67,3 @@ def route_prompt(prompt):
 #print("True" in str(need_AgentE("I want to access google calendar and send evan an invite to meet up.")))
 
 #print(agentic_steps("Find me emails for 50 data brokers and email them asking to meet so I can ask them about my startup idea."))
-
-route_prompt("Solve the equation 5x+3=10")
