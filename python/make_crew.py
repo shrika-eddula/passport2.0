@@ -61,6 +61,6 @@ def create_system(output):
     try:
         result = crew.kickoff() 
         print(result)
+        yield result
     except:
         yield "Process failed. Trying again."
-    yield result

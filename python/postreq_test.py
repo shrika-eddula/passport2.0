@@ -11,12 +11,13 @@ CORS(app, resources={r"/api/*": {"origins": "http://localhost:8888", "supports_c
 # Simulating a database to store chat sessions
 chat_sessions = {}
  
-
+import json 
 def generate_llm_response(prompt):
     # Simulating LLM response. Replace this with actual LLM integration.
     # result = f"Response to: {prompt}. Lorem ipsum dolor sit amet, consectetur adipiscing elit.".split()
     agent_starter_filepath = "/Users/advaygoel/Desktop/passport2.0/python/AgentE/AgentE_Planner.py"
-    result = route_prompt(prompt, agent_starter_filepath)
+    overall_prompt= f"Here is your prompt: {prompt}. Use the following chat sessions to provide context: {json.dumps(chat_sessions)}."
+    result = route_prompt(overall_prompt, agent_starter_filepath)
     if isinstance(result, str):
         for word in " ".split(result):
             yield word + " "
@@ -36,6 +37,7 @@ def start_chat():
 @app.route('/api/chat', methods=['POST'])
 def chat():
     data = request.json
+    print('here is chat sessions:', json.dumps(chat_sessions))
     session_id = data.get('session_id')
     user_input = data.get('text', '')
     print("here is user input:", user_input)
