@@ -133,7 +133,7 @@ export function OttoDashboardComponent() {
                   <SidebarItem icon={PeopleIcon} label="People" />
                 </Link>
 
-                <Link href="/workstreams">
+                <Link href="/tools">
                   <SidebarItem icon={ToolsIcon} label="Tools" />
                 </Link>
 
