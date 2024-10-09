@@ -1,100 +1,40 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
 import { Bell, Menu, MoreHorizontal, PenSquare } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 
-export function OttoDashboardComponent() {
+export function OldDashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [inputText, setInputText] = useState("");
-  const [sessionId, setSessionId] = useState(null);
-  const [chatHistory, setChatHistory] = useState([]);
-  const [isStreaming, setIsStreaming] = useState(false);
-  const chatEndRef = useRef(null);
-
-  useEffect(() => {
-    startNewChat();
-  }, []);
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatHistory]);
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
 
-  const startNewChat = async () => {
-    try {
-      const response = await fetch("http://127.0.0.1:5000/api/start_chat", {
-        method: "POST",
-        credentials: "include",
-      });
-      const data = await response.json();
-      setSessionId(data.session_id);
-      setChatHistory([]);
-    } catch (error) {
-      console.error("Error starting new chat:", error);
-    }
-  };
-
   const handleInputChange = (event) => {
-    setInputText(event.target.value);
-  };
-
-  const handleKeyPress = (event) => {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      handleSubmit();
-    }
+    setInputText(event.target.value); // Update state with input value
   };
 
   const handleSubmit = async () => {
-    console.log(sessionId);
-    if (!inputText.trim() || !sessionId) return;
-
-    setChatHistory((prev) => [...prev, { role: "user", content: inputText }]);
-    setInputText("");
-    setIsStreaming(true);
-
     try {
-      const response = await fetch("http://127.0.0.1:5000/api/chat", {
+      const response = await fetch("http://127.0.0.1:5000/submit", {
         method: "POST",
-        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ session_id: sessionId, text: inputText }),
+        body: JSON.stringify({ text: inputText }), // Send input text as JSON
       });
-
-      const reader = response.body.getReader();
-      let assistantResponse = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = new TextDecoder().decode(value);
-        assistantResponse += chunk;
-        setChatHistory((prev) => {
-          const newHistory = [...prev];
-          if (newHistory[newHistory.length - 1]?.role === "assistant") {
-            newHistory[newHistory.length - 1].content = assistantResponse;
-          } else {
-            newHistory.push({ role: "assistant", content: assistantResponse });
-          }
-          return newHistory;
-        });
-      }
+      const data = await response.json();
+      console.log("Response from server:", data);
     } catch (error) {
       console.error("Error:", error);
-    } finally {
-      setIsStreaming(false);
     }
   };
 
   return (
     <div className="flex h-screen bg-gray-100">
-      {/* Sidebar component (unchanged) */}
+      {/* Sidebar */}
       <aside
         className={`${
           isSidebarOpen ? "w-64" : "w-16"
@@ -160,8 +100,8 @@ export function OttoDashboardComponent() {
             {isSidebarOpen && (
               <>
                 <div className="ml-2 flex-grow overflow-hidden">
-                  <p className="font-semibold truncate">Evan Goel</p>
-                  <p className="text-xs text-gray-400 truncate">otto@mit.edu</p>
+                  <p className="font-semibold truncate">Harvin Park</p>
+                  <p className="text-xs text-gray-400 truncate">harv@cmu.edu</p>
                 </div>
                 <MoreHorizontal className="w-5 h-5 flex-shrink-0" />
               </>
@@ -170,56 +110,70 @@ export function OttoDashboardComponent() {
         </div>
       </aside>
 
-      <main className="flex-1 p-8 overflow-auto flex flex-col">
+      {/* Main content */}
+      <main className="flex-1 p-8 overflow-auto">
         <header className="flex justify-between items-center mb-8">
-          <h2 className="text-3xl font-bold">Chat with Otto</h2>
-          <button
-            onClick={startNewChat}
-            className="bg-blue-500 text-white px-4 py-2 rounded"
-          >
-            New Chat
-          </button>
+          <h2 className="text-3xl font-bold">Good Morning, Harvin</h2>
+          <div className="flex items-center space-x-4">
+            <div className="text-right">
+              <p className="font-semibold">Oct 8</p>
+              <p className="text-gray-600">72°</p>
+            </div>
+            <div className="relative">
+              <Bell className="w-6 h-6" />
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+                6
+              </span>
+            </div>
+          </div>
         </header>
 
-        <div className="flex-grow overflow-auto mb-4">
-          {chatHistory.map((message, index) => (
-            <div
-              key={index}
-              className={`mb-4 ${
-                message.role === "user" ? "text-right" : "text-left"
-              }`}
-            >
-              <div
-                className={`inline-block p-2 rounded-lg ${
-                  message.role === "user" ? "bg-blue-100" : "bg-gray-200"
-                }`}
-              >
-                {message.content}
-              </div>
-            </div>
-          ))}
-          <div ref={chatEndRef} />
-        </div>
-
-        <div className="bg-white rounded-lg p-4 shadow-sm">
-          <div className="flex items-center">
+        <div className="bg-white rounded-lg p-6 mb-8 shadow-sm">
+          <div className="flex items-center text-gray-600">
+            <PenSquare className="w-5 h-5 mr-2" />
             <input
               type="text"
-              className="flex-grow text-lg border-none outline-none"
-              placeholder="Ask Otto anything!"
-              value={inputText}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyPress}
-              disabled={isStreaming}
+              className="text-lg border-none outline-none"
+              placeholder="Ask Otto for anything!"
+              value={inputText} // Bind input value to state
+              onChange={handleInputChange} // Handle input change
             />
-            <button
-              onClick={handleSubmit}
-              disabled={isStreaming}
-              className="bg-blue-500 text-white px-4 py-2 rounded ml-2"
-            >
-              Send
-            </button>
+            <button onClick={handleSubmit}>Submit</button>
           </div>
+        </div>
+
+        <div className="mb-4 flex justify-between items-center">
+          <h3 className="text-xl font-semibold">Upcoming Tasks:</h3>
+          <Link href="#" className="text-blue-600 hover:underline">
+            View All →
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <TaskCard
+            icon={CalendarIcon}
+            title="Daily Sprint Meeting"
+            time="10AM - 11AM"
+            editable
+          />
+          <TaskCard
+            icon={DocumentIcon}
+            title="Read Q4 Report"
+            description="Estimated 2 hrs"
+            deadline="by 2PM"
+          />
+          <TaskCard
+            icon={CalendarIcon}
+            title="Sales Leads Connect"
+            time="2PM - 3PM"
+            editable
+          />
+          <TaskCard
+            icon={MeetingIcon}
+            title="Prep Client Meeting"
+            description="Estimated 6 hrs"
+            deadline="by EOD"
+          />
         </div>
       </main>
     </div>

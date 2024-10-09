@@ -3,6 +3,7 @@ import Head from "next/head";
 import Link from "next/link";
 import Image from "next/image";
 import { OttoDashboardComponent } from "./dashboard";
+// import { OldDashboard } from "./scratch";
 
 export default function HomePage() {
   return (
@@ -11,6 +12,7 @@ export default function HomePage() {
         <title>OTTO</title>
       </Head>
       <OttoDashboardComponent />
+      {/* <OldDashboard /> */}
     </React.Fragment>
   );
 }
