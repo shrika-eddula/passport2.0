@@ -15,11 +15,16 @@ chat_sessions = {}
 def generate_llm_response(prompt):
     # Simulating LLM response. Replace this with actual LLM integration.
     # result = f"Response to: {prompt}. Lorem ipsum dolor sit amet, consectetur adipiscing elit.".split()
-    agent_starter_filepath = "/Users/evan_kim/passport2.0/AgentE/AgentE_Planner.py"
+    agent_starter_filepath = "/Users/advaygoel/Desktop/passport2.0/python/AgentE/AgentE_Planner.py"
     result = route_prompt(prompt, agent_starter_filepath)
-    for word in result:
-        yield word + " "
-        time.sleep(0.05)
+    if isinstance(result, str):
+        for word in " ".split(result):
+            yield word + " "
+            time.sleep(0.05)
+    else:
+        for word in result:
+            yield word + " "
+            time.sleep(0.05)
     
 
 @app.route('/api/start_chat', methods=['POST'])
