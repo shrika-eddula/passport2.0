@@ -50,7 +50,7 @@ def create_tasks(prompt, agents):
                       agent=agents["agente"])
                     )
     tasks.append(Task(description=f"Using the information provided by the previous agent, format the data to answer the prompt, which is {prompt}.",
-                      expected_output="A nice readable summary of the Google Calendar info to present to the user.",
+                      expected_output="A nice readable summary of the Google Calendar info to present to the user. If there's a list, put the list in bullet point form.",
                       agent=agents["other"])
                     )
     return tasks 
