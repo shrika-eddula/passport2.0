@@ -129,7 +129,7 @@ def route_prompt(prompt, agent_starter_filepath = None):
     #     subprocess.run(command)
     #     return "process complete"
     # else:
-    if any(["Google Calendar", "Gcal", "Calendar", "Google Cal"]) in prompt:
+    if any(["Google Calendar", "Gcal", "Calendar", "Google Cal", "Calendr", "calendar", "google calendar", "Google calendar", "GOOGLE CALENDAR"]) in prompt:
         for res in create_gcal_system(prompt):
             yield res
     else:
