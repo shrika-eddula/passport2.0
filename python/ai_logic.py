@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from AgentE.AgentE_Planner import main
 client = OpenAI()
 from make_crew import create_system
+from predefined_crews.gcal import create_gcal_system
 
 class Boolean(BaseModel):
     answer: bool
@@ -97,7 +98,6 @@ def need_agents(prompt):
 
     return completion.choices[0].message.parsed 
 
-
 def answer_prompt(prompt):
     """
     Chatbot style q/a
@@ -129,29 +129,32 @@ def route_prompt(prompt, agent_starter_filepath = None):
     #     subprocess.run(command)
     #     return "process complete"
     # else:
-
-    need_agent = need_agents(prompt)
-    if "False" in str(need_agent):
-        ans= answer_prompt(prompt)
-        print(ans)
-        print(type(ans))
-        yield ans 
+    if any(["Google Calendar", "Gcal", "Calendar", "Google Cal"]) in prompt:
+        for res in create_gcal_system(prompt):
+            yield res
     else:
-        steps = agentic_steps(prompt)
-        agente=False
-        for agent in steps.agents:
-            if "True" in str(need_AgentE(agent.goal)):
-                agent.agentE=True
-                if not agente:
-                    yield "Agent E is running.\n"
-                    agente=True
-            else:
-                agent.agentE=False
-        
-        print(steps)
-        print("hi")
-        for res in create_system(steps):
-            yield res 
+        need_agent = need_agents(prompt)
+        if "False" in str(need_agent):
+            ans= answer_prompt(prompt)
+            print(ans)
+            print(type(ans))
+            yield ans 
+        else:
+            steps = agentic_steps(prompt)
+            agente=False
+            for agent in steps.agents:
+                if "True" in str(need_AgentE(agent.goal)):
+                    agent.agentE=True
+                    if not agente:
+                        yield "Agent E is running.\n"
+                        agente=True
+                else:
+                    agent.agentE=False
+            
+            print(steps)
+            print("hi")
+            for res in create_system(steps):
+                yield res 
     #return create_system(steps)
 
 
